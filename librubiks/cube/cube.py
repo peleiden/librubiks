@@ -28,11 +28,8 @@ from librubiks.cube.maps import SimpleState, get_corner_pos, get_side_pos, get_t
 
 # If the six sides are represented by an array, the order should be F, B, T, D, L, R
 F, B, T, D, L, R = 0, 1, 2, 3, 4, 5
-action_names = ('F', 'B', 'T', 'D', 'L', 'R')
-
-action_space = list()
-for i in range(6): action_space.extend( [(i, 1), (i, 0)] )
-action_dim = len(action_space)
+action_names = "F", "F'", "B", "B'", "T", "T'", "D", "D'", "L", "L'", "R", "R'"
+action_dim = len(action_names)
 
 ################
 # Rotate logic #
@@ -43,12 +40,12 @@ def rotate(state: np.ndarray, face: int, direction: int) -> np.ndarray:
 	Performs one move on the cube, specified by the side (0-5),
 	and if the direction is negative (0) or positive (1)
 	"""
-	method = _Cube2024.rotate if get_is2024() else _Cube686.rotate
+	method = _Cube2024.act if get_is2024() else _Cube686.rotate
 	return method(state, face, direction)
 
 def multi_rotate(states: np.ndarray, faces: np.ndarray, directions: np.ndarray) -> np.ndarray:
 	# Performs action (faces[i], directions[i]) on states[i]
-	method = _Cube2024.multi_rotate if get_is2024() else _Cube686.multi_rotate
+	method = _Cube2024.multi_act if get_is2024() else _Cube686.multi_rotate
 	return method(states, faces, directions)
 
 #################
@@ -242,24 +239,20 @@ class _Cube2024:
 	oh_idcs = np.arange(20) * 24
 
 	@classmethod
-	def rotate(cls, state: np.ndarray, face: int, direction: int):
+	def act(cls, state: np.ndarray, action: int):
 		"""
 		Performs one move on the cube, specified by the side (0-5),
 		and whether the rotation is in a positive direction (0 for negative and 1 for positive)
 		"""
 		
-		map_ = cls.maps[direction, face]
-		state = state + map_[cls.corner_side_idcs, state]
-		
-		return state
+		return cls.maps[action, cls.corner_side_idcs, state].copy()
 
 	@classmethod
-	def multi_rotate(cls, states: np.ndarray, faces: np.ndarray, directions: np.ndarray):
-		# Performs action (faces[i], directions[i]) on states[i]
-		maps = cls.maps[directions, faces]
-		idcs = np.broadcast_to(np.arange(len(states)), (20, len(states))).T.ravel()
-		corners_sides = np.broadcast_to(cls.corner_side_idcs, (len(states), 20)).ravel()
-		states = states + maps[idcs, corners_sides, states.ravel()].reshape((len(states), 20))
+	def multi_act(cls, states: np.ndarray, actions: np.ndarray):
+		# Performs actions[i] on states[i]
+		actions = np.broadcast_to(actions, (20, len(actions))).T.flat
+		corners_sides = np.broadcast_to(cls.corner_side_idcs, (len(states), 20)).flat
+		states = cls.maps[actions, corners_sides, states.flat].reshape((len(states), 20)).copy()  # TODO: Find out if copy is nescessary
 		return states
 
 	@classmethod
@@ -386,4 +379,13 @@ class _Cube686:
 		for i in range(6):
 			state69[i, cls.map633] = np.roll(state68[i], -cls.shifts[i], axis=0)
 		return state69.reshape((6, 3, 3))
+
+
+if __name__ == "__main__":
+	state = get_solved()
+	print(_Cube2024.act(state, 0))
+	states = repeat_state(get_solved(), 120)
+	print(_Cube2024.multi_act(states, np.repeat(np.arange(action_dim), 10)))
+	# for a in actions:
+	# 	state = _Cube2024.act(state, a)
 

@@ -3,6 +3,7 @@ from scipy.stats import norm
 
 from librubiks import cube
 from librubiks.cube import get_is2024, set_is2024, store_repr, restore_repr
+from librubiks.cube.cube import _Cube2024
 from librubiks.utils import Logger, TickTock, TimeUnit
 
 def _repstr():
@@ -14,8 +15,8 @@ def _get_states(shape: tuple):
 	states = np.empty(shape, dtype=cube.dtype)
 	states[0] = cube.repeat_state(cube.get_solved(), n_states)
 	for i in range(1, len(states)):
-		faces, dirs = np.random.randint(0, 6, n_states), np.random.randint(0, 2, n_states)
-		states[i] = cube.multi_rotate(states[i-1], faces, dirs)
+		actions = np.random.randint(0, cube.action_dim, n_states)
+		states[i] = _Cube2024.multi_act(states[i-1], actions)
 	return states
 
 class CubeBench:
@@ -26,12 +27,12 @@ class CubeBench:
 	
 	def rotate(self, n: int):
 		self.log.section(f"Benchmarking {TickTock.thousand_seps(n)} single rotations, {_repstr()}")
-		faces, dirs = np.random.randint(0, 6, n), np.random.randint(0, 2, n)
+		actions = np.random.randint(0, cube.action_dim, n)
 		state = cube.get_solved()
 		pname = f"Single rotation, {_repstr()}"
-		for f, d in zip(faces, dirs):
+		for a in actions:
 			self.tt.profile(pname)
-			state = cube.rotate(state, f, d)
+			state = _Cube2024.act(state, a)
 			self.tt.end_profile()
 		self._log_method_results("Average rotation time", pname)
 	
@@ -39,11 +40,11 @@ class CubeBench:
 		self.log.section(f"Benchmarking {TickTock.thousand_seps(n)} multi rotations of "
 						 f"{TickTock.thousand_seps(n_states)} states each, {_repstr()}")
 		states = cube.repeat_state(cube.get_solved(), n_states)
-		faces, dirs = np.random.randint(0, 6, (n, n_states)), np.random.randint(0, 2, (n, n_states))
+		actions = np.random.randint(0, cube.action_dim, (n, n_states))
 		pname = f"{TickTock.thousand_seps(n_states)} rotations, {_repstr()}"
-		for f, d in zip(faces, dirs):
+		for actions_ in actions:
 			self.tt.profile(pname)
-			states = cube.multi_rotate(states, f, d)
+			states = _Cube2024.multi_act(states, actions_)
 			self.tt.end_profile()
 		self._log_method_results("Average rotation time", pname, n_states)
 	
@@ -108,20 +109,20 @@ def benchmark():
 	cube_bench = CubeBench(log, tt)
 
 	# Cube config variables
-	cn = int(1e7)
+	cn = int(1e6)
 	multi_op_size = int(1e4)  # Number of states used in multi operations
 
 	store_repr()
-	for repr_ in [True, False]:
+	for repr_ in [True]:
 		set_is2024(repr_)
 		log.section(f"Benchmarking cube enviroment with {_repstr()} representation")
 		tt.profile(f"Benchmarking cube environment, {_repstr()}")
-		cube_bench.rotate(cn)
+		# cube_bench.rotate(cn)
 		cube_bench.multi_rotate(int(cn/multi_op_size), multi_op_size)
-		cube_bench.onehot(cn)
-		cube_bench.multi_onehot(int(cn/multi_op_size), multi_op_size)
-		cube_bench.check_solution(cn)
-		cube_bench.check_multi_solution(int(cn/multi_op_size), multi_op_size)
+		# cube_bench.onehot(cn)
+		# cube_bench.multi_onehot(int(cn/multi_op_size), multi_op_size)
+		# cube_bench.check_solution(cn)
+		# cube_bench.check_multi_solution(int(cn/multi_op_size), multi_op_size)
 		tt.end_profile(f"Benchmarking cube environment, {_repstr()}")
 	
 	restore_repr()

@@ -106,8 +106,7 @@ def get_side_pos(pos: int, orientation: int):
 
 def get_tensor_map(dtype):
 	"""
-	Returns two maps
-	The first is positive revolution, second is negative
+	Returns a 12 x 2 x 24 mapping tensor
 	Each is a six long list containg 2x24 mapping tensors
 	Order is F, B, T, D, L, R
 	Row one for corners [:8] and row two for sides [8:]
@@ -119,8 +118,8 @@ def get_tensor_map(dtype):
 	# Mappings for each action
 	for i in range(6):
 		action = actions[i]
-		pos = np.zeros((2, 24), dtype=dtype)
-		neg = np.zeros((2, 24), dtype=dtype)
+		neg = np.array([np.arange(24)]*2, dtype=dtype)
+		pos = np.array([np.arange(24)]*2, dtype=dtype)
 		# Mappings for each corner/side cubies
 		for j in range(4):
 			# Mappings for corners
@@ -128,19 +127,19 @@ def get_tensor_map(dtype):
 				new_orientation = k if k == action.corner_static else next(iter({0, 1, 2} - {action.corner_static, k}))
 				from_idx = get_corner_pos(action.corner_map[j], k)
 				to_idx = get_corner_pos(action.corner_map[j+1], new_orientation)
-				pos[0, from_idx] = to_idx - from_idx
-				neg[0, to_idx] = from_idx - to_idx
+				pos[0, from_idx] = to_idx
+				neg[0, to_idx] = from_idx
 			# Mappings for sides
 			for k in range(2):
 				new_orientation = k if not action.side_switch else int(not k)
 				from_idx = get_side_pos(action.side_map[j], k)
 				to_idx = get_side_pos(action.side_map[j+1], new_orientation)
-				pos[1, from_idx] = to_idx - from_idx
-				neg[1, to_idx] = from_idx - to_idx
+				pos[1, from_idx] = to_idx
+				neg[1, to_idx] = from_idx
 		map_pos.append(pos)
 		map_neg.append(neg)
 	
-	maps = np.array([map_neg, map_pos])
+	maps = np.vstack([map_neg, map_pos])
 
 	return maps
 
@@ -158,12 +157,13 @@ neighbors_686 = np.array([
 
 if __name__ == "__main__":
 	# Pretty print of tensor maps
-	map_pos, map_neg = get_tensor_map(np.int8)
-	for pos, neg in zip(map_pos, map_neg):
-		print("".join([f"{x: 4}" for x in pos[0]]))
-		print("".join([f"{x: 4}" for x in pos[1]]))
+	maps = get_tensor_map(np.int8)
+	print(maps.shape)
+	for neg, pos in zip(maps[:6], maps[6:]):
 		print("".join([f"{x: 4}" for x in neg[0]]))
 		print("".join([f"{x: 4}" for x in neg[1]]))
+		print("".join([f"{x: 4}" for x in pos[0]]))
+		print("".join([f"{x: 4}" for x in pos[1]]))
 		print()
 
 
