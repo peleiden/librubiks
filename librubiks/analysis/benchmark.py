@@ -109,7 +109,7 @@ def benchmark():
 	cube_bench = CubeBench(log, tt)
 
 	# Cube config variables
-	cn = int(1e6)
+	cn = int(1e7)
 	multi_op_size = int(1e4)  # Number of states used in multi operations
 
 	store_repr()
@@ -117,12 +117,12 @@ def benchmark():
 		set_is2024(repr_)
 		log.section(f"Benchmarking cube enviroment with {_repstr()} representation")
 		tt.profile(f"Benchmarking cube environment, {_repstr()}")
-		# cube_bench.rotate(cn)
+		cube_bench.rotate(cn)
 		cube_bench.multi_rotate(int(cn/multi_op_size), multi_op_size)
-		# cube_bench.onehot(cn)
-		# cube_bench.multi_onehot(int(cn/multi_op_size), multi_op_size)
-		# cube_bench.check_solution(cn)
-		# cube_bench.check_multi_solution(int(cn/multi_op_size), multi_op_size)
+		cube_bench.onehot(cn)
+		cube_bench.multi_onehot(int(cn/multi_op_size), multi_op_size)
+		cube_bench.check_solution(cn)
+		cube_bench.check_multi_solution(int(cn/multi_op_size), multi_op_size)
 		tt.end_profile(f"Benchmarking cube environment, {_repstr()}")
 	
 	restore_repr()

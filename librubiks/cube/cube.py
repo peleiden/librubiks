@@ -234,6 +234,7 @@ def sequence_scrambler(games: int, depth: int, with_solved: bool) -> (np.ndarray
 class _Cube2024:
 
 	maps = get_tensor_map(dtype)
+	corner_maps, side_maps = maps
 	corner_side_idcs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
 	corner_633map, side_633map = get_633maps(F, B, T, D, L, R)
 	oh_idcs = np.arange(20) * 24
@@ -245,14 +246,14 @@ class _Cube2024:
 		and whether the rotation is in a positive direction (0 for negative and 1 for positive)
 		"""
 		
-		return cls.maps[action, cls.corner_side_idcs, state].copy()
+		return cls.maps[cls.corner_side_idcs, action, state].copy()
 
 	@classmethod
 	def multi_act(cls, states: np.ndarray, actions: np.ndarray):
-		# Performs actions[i] on states[i]
-		actions = np.broadcast_to(actions, (20, len(actions))).T.flat
-		corners_sides = np.broadcast_to(cls.corner_side_idcs, (len(states), 20)).flat
-		states = cls.maps[actions, corners_sides, states.flat].reshape((len(states), 20)).copy()  # TODO: Find out if copy is nescessary
+		repeated_actions = np.tile(actions, (12, 1)).ravel("F")
+		states = states.copy()
+		states[:, :8] = cls.corner_maps[repeated_actions[:8*len(actions)], states[:, :8].flat].reshape(-1, 8)
+		states[:, 8:] = cls.side_maps[repeated_actions, states[:, 8:].flat].reshape(-1, 12)
 		return states
 
 	@classmethod
@@ -381,11 +382,4 @@ class _Cube686:
 		return state69.reshape((6, 3, 3))
 
 
-if __name__ == "__main__":
-	state = get_solved()
-	print(_Cube2024.act(state, 0))
-	states = repeat_state(get_solved(), 120)
-	print(_Cube2024.multi_act(states, np.repeat(np.arange(action_dim), 10)))
-	# for a in actions:
-	# 	state = _Cube2024.act(state, a)
 

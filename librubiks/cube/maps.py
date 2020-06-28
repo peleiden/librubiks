@@ -101,10 +101,10 @@ class Actions:
 def get_corner_pos(pos: int, orientation: int):
 	return pos * 3 + orientation
 
-def get_side_pos(pos: int, orientation: int):
+def get_side_pos(pos: int, orientation: int) -> int:
 	return pos * 2 + orientation
 
-def get_tensor_map(dtype):
+def get_tensor_map(dtype) -> np.ndarray:
 	"""
 	Returns a 12 x 2 x 24 mapping tensor
 	Each is a six long list containg 2x24 mapping tensors
@@ -118,8 +118,8 @@ def get_tensor_map(dtype):
 	# Mappings for each action
 	for i in range(6):
 		action = actions[i]
-		neg = np.array([np.arange(24)]*2, dtype=dtype)
-		pos = np.array([np.arange(24)]*2, dtype=dtype)
+		neg = np.array(2*[np.arange(24)], dtype=dtype)
+		pos = np.array(2*[np.arange(24)], dtype=dtype)
 		# Mappings for each corner/side cubies
 		for j in range(4):
 			# Mappings for corners
@@ -139,7 +139,7 @@ def get_tensor_map(dtype):
 		map_pos.append(pos)
 		map_neg.append(neg)
 	
-	maps = np.vstack([map_neg, map_pos])
+	maps = np.vstack([map_neg, map_pos]).transpose((1, 0, 2))
 
 	return maps
 
