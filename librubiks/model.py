@@ -25,7 +25,6 @@ class ModelConfig:
 				 batchnorm=True, architecture="fc_small",
 				 init="glorot",
 				 is2024=True,
-				 **kwargs,  # For backwardscompatibility
 			):
 		self.activation_function = activation_function
 		self.batchnorm = batchnorm

@@ -1,2 +1,2 @@
 ### To allow direct imports ###
-from .cube import *
+from .envs import *

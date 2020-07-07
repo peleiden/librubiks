@@ -116,6 +116,7 @@ is given, data/local_train with newest name is used. If the location
 contains multiple neural networks, the deep agents are evalued for
 each of them.
 """
+	# TODO: Instead of this mess combining plots of different jobs, keep them seperate and allow multiple agents per job
 	set_seeds()
 
 	parser = Parser(options, description=description, name='eval', description_last='Tue')
