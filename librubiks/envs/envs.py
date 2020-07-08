@@ -1,34 +1,30 @@
 """
-The API for our Rubik's Cube simulator.
-As we use the Rubik's cube in many different ways, this module has some requirements
+The API for our enviroments -- for now only two representations of Rubik's cube.
+As we use the environments in many different ways, this module has some requirements
 
-- Pretty much all functions must work without altering any state as they are to be used by agents.
+- All functionality must be out-of-place, as doing it in-place would require significant bookkeeping outside the module
 - Efficiency
-- Must support two different Rubik's representations (20x24 and 6x8x6)
 
 The solution to this is this quite large module with these features
 
-- The module carries NO STATE: Environment state must be maintained elsewhere when used and this API works
-	mostly purely functionally
-- Many functions are polymorphic between corresponding functions of the two representations
+- The module carries NO STATE: Environment state must be maintained elsewhere when used and this API is purely functional
+- Most functions are polymorphic between corresponding functions of different environments - though some exceptions exist
 - Most functions are implemented compactly using numpy or pytorch sacrificing readability for efficiency
-- Some global constants are maintained
 """
+
 from abc import ABC
-from enum import Enum
-import functools
 import numpy as np
 import torch
 
 from librubiks import gpu
-from librubiks.envs.maps import SimpleState, get_corner_pos, get_side_pos, get_tensor_map, get_633maps, neighbors_686
+from librubiks.envs.cube_maps import SimpleState, get_corner_pos, get_side_pos, get_tensor_map, get_633maps, neighbors_686
+
 
 #########################
 # BASE ENVIROMENT CLASS #
 #########################
 
 class _Environment(ABC):
-
 	dtype = np.int8
 	action_dim: int
 	action_space: np.ndarray
@@ -36,77 +32,113 @@ class _Environment(ABC):
 	shape: tuple
 	oh_size: int
 	_solved_state: np.ndarray
-	
+
 	@classmethod
 	def act(cls, state: np.ndarray, action: int) -> np.ndarray:
+		"""
+		Perform an action on a given state and return the result
+		"""
 		raise NotImplementedError
 
 	@classmethod
 	def multi_act(cls, states: np.ndarray, actions: np.ndarray) -> np.ndarray:
+		"""
+		Perform n actions on n states and return the n resulting states
+		"""
 		return np.array([cls.act(state, action) for state, action in zip(states, actions)])
 
 	@classmethod
 	def get_solved_instance(cls) -> np.ndarray:
+		"""
+		Get an instance of the solved state
+		Careful Ned, careful now -- this method does not return a copy,
+		and the result is there read-only and should only be used, when speed is critical
+		"""
 		return cls._solved_state
 
 	@classmethod
 	def get_solved(cls) -> np.ndarray:
+		"""
+		The same as _Environment.get_solved_instance, but returns a copy, which can be safely modified
+		"""
 		return cls.get_solved_instance().copy()
 
 	@classmethod
-	def is_solved(cls, state: np.ndarray) -> np.ndarray:
-		raise NotImplementedError
+	def is_solved(cls, state: np.ndarray) -> bool:
+		"""
+		Returns whether or not the given state is solved
+		"""
+		return (state == cls.get_solved_instance()).all()
 
 	@classmethod
 	def multi_is_solved(cls, states: np.ndarray) -> np.ndarray:
-		return np.ndarray([cls.is_solved(state) for state in states])
+		"""
+		Returns an n long boolean vector containing whether or not the n given states are solved
+		"""
+		return (states == cls.get_solved_instance()).all(axis=tuple(range(1, len(cls.shape)+1)))
 
 	@classmethod
 	def as_oh(cls, state: np.ndarray) -> torch.tensor:
+		"""
+		One-hot encodes a state and returns the result saved on the gpu
+		"""
 		raise NotImplementedError
 
 	@classmethod
 	def multi_as_oh(cls, states: np.ndarray) -> torch.tensor:
+		"""
+		One-hot encodes n states and returns the result saved on the gpu
+		"""
 		return torch.cat([cls.as_oh(state) for state in states])
-	
+
 	@classmethod
 	def rev_action(cls, action: int) -> int:
+		"""
+		Returns the reverse of a given action, such that
+		env.act(state, action) == env.act(env.act(state, action), env.rev_action(action))
+		"""
 		raise NotImplementedError
 
 	@classmethod
 	def multi_rev_action(cls, actions: np.ndarray) -> np.ndarray:
+		"""
+		Returns n actions which are the reverse of the n given actions
+		"""
 		return np.array([cls.rev_action(action) for action in actions])
-	
+
 	@classmethod
 	def stringify(cls, state: np.ndarray) -> str:
+		"""
+		Stringifies the state into a more readable manner
+		"""
 		raise NotImplementedError
-	
+
 	################
 	# Action logic #
 	################
 
 	@classmethod
-	def iter_actions(cls, n: int=1):
+	def iter_actions(cls, n: int = 1):
 		"""
 		Returns a numpy array of size n * action_dim containing tiled actions
-		Useful in combination with repeat_states
+		Useful in combination with repeat_state
 		"""
 		return np.tile(cls.action_space, n)
 
 	@classmethod
-	def repeat_state(cls, state: np.ndarray, n: int=None) -> np.ndarray:
+	def repeat_state(cls, state: np.ndarray, n: int = None) -> np.ndarray:
 		"""
 		Repeats state n times, such that the output array will have shape n x *Cube shape
 		Useful in combination with multi_rotate
 		"""
 		if n is None:
 			n = cls.action_dim
-		return np.tile(state, [n, *[1]*len(shape())])
+		return np.tile(state, [n, *[1] * len(cls.shape)])
 
 	####################
 	# Scrambling logic #
 	####################
-	
+
 	@classmethod
 	def scramble(cls, depth: int, force_not_solved=False) -> (np.ndarray, np.ndarray, np.ndarray):
 		actions = np.random.randint(0, cls.action_dim, depth)
@@ -133,72 +165,89 @@ class _Environment(ABC):
 		for d in range(depth - with_solved):
 			current_states = cls.multi_act(current_states, actions[d])
 			states.append(current_states)
-		states = np.vstack(np.transpose(states, (1, 0, *np.arange(2, len(shape())+2))))
-		oh_states = as_oh(states)
+		states = np.vstack(np.transpose(states, (1, 0, *np.arange(2, len(cls.shape) + 2))))
+		oh_states = cls.multi_as_oh(states)
 		return states, oh_states
 
-
-# If the six sides are represented by an array, the order should be F, B, T, D, L, R
-F, B, T, D, L, R = 0, 1, 2, 3, 4, 5
 
 ################
 # ENVIRONMENTS #
 ################
 
-# TODO: Consider shared cube enviroment for stuff like this
-def _stringify_cube(state633: np.ndarray) -> str:
-	stringarr = np.empty((9, 12), dtype=str)
-	stringarr[...] = " "
-	simple = np.array([
-		[-1, T, -1, -1],
-		[L,  F,  R,  B],
-		[-1, D, -1, -1],
-	])
-	for i in range(6):
-		pos = tuple(int(x) for x in np.where(simple==i))
-		stringarr[pos[0]*3 : pos[0]*3+3, pos[1]*3 : pos[1]*3+3] = state633[i].astype(str)
-	string = "\n".join([" ".join(list(y)) for y in stringarr])
-	return string
-# FIXME
-def rev_action(action: int) -> int:
-	return action + 1 if action % 2 == 0 else action - 1
-
-def rev_actions(actions: np.ndarray) -> np.ndarray:
-	rev_actions = actions - 1
-	rev_actions[actions % 2 == 0] += 2
-	return rev_actions
-
-@staticmethod
-def _get_2024solved(dtype):
-	solved_state = SimpleState()
-	tensor_state = np.empty(20, dtype=dtype)
-	for i in range(8):
-		tensor_state[i] = get_corner_pos(solved_state.corners[i], solved_state.corner_orientations[i])
-	for i in range(12):
-		tensor_state[i+8] = get_side_pos(solved_state.sides[i], solved_state.side_orientations[i])
-	return tensor_state
-def _get_686solved(dtype):
-	solved_state = np.zeros((6, 8, 6), dtype=dtype)
-	for i in range(6):
-		solved_state[i, :, i] = 1
-	return solved_state
-
-_solved2024 = _get_2024solved(dtype)
-_solved686 = _get_686solved(dtype)
-
-class _Cube2024(_Environment):
+class _Cube(_Environment, ABC):
 
 	action_dim = 12
 	action_space = np.arange(action_dim)
 	action_names = "F", "F'", "B", "B'", "T", "T'", "D", "D'", "L", "L'", "R", "R'"
-	oh_size = 480
-	_solved_state = _get_2024solved(dtype)
 
-	maps = get_tensor_map(dtype)
+	# If the six sides are represented by an array, the order should be F, B, T, D, L, R
+	F, B, T, D, L, R = 0, 1, 2, 3, 4, 5
+
+	@classmethod
+	def rev_action(cls, action: int) -> int:
+		return action + 1 if action % 2 == 0 else action - 1
+
+	@classmethod
+	def rev_actions(cls, actions: np.ndarray) -> np.ndarray:
+		rev_actions = actions - 1
+		rev_actions[actions % 2 == 0] += 2
+		return rev_actions
+
+	@classmethod
+	def _as633(cls, state: np.ndarray) -> np.ndarray:
+		raise NotImplementedError
+
+	@classmethod
+	def _stringify_cube(cls, state633: np.ndarray) -> str:
+		stringarr = np.empty((9, 12), dtype=str)
+		stringarr[...] = " "
+		simple = np.array([
+			[-1, cls.T, -1, -1],
+			[cls.L, cls.F, cls.R, cls.B],
+			[-1, cls.D, -1, -1],
+		])
+		for i in range(6):
+			pos = tuple(int(x) for x in np.where(simple == i))
+			stringarr[pos[0] * 3: pos[0] * 3 + 3, pos[1] * 3: pos[1] * 3 + 3] = state633[i].astype(str)
+		string = "\n".join([" ".join(list(y)) for y in stringarr])
+		return string
+
+	@classmethod
+	def stringify(cls, state: np.ndarray) -> str:
+		return cls._stringify_cube(cls._as633(state))
+
+	@classmethod
+	def _get_686solved(cls) -> np.ndarray:
+		solved_state = np.zeros((6, 8, 6), dtype=cls.dtype)
+		for i in range(6):
+			solved_state[i, :, i] = 1
+		return solved_state
+
+	@classmethod
+	def _get_2024solved(cls) -> np.ndarray:
+		solved_state = SimpleState()
+		tensor_state = np.empty(20, dtype=cls.dtype)
+		for i in range(8):
+			tensor_state[i] = get_corner_pos(solved_state.corners[i], solved_state.corner_orientations[i])
+		for i in range(12):
+			tensor_state[i + 8] = get_side_pos(solved_state.sides[i], solved_state.side_orientations[i])
+		return tensor_state
+
+
+class _Cube2024(_Cube):
+
+	oh_size = 480
+
+	maps = get_tensor_map(_Cube.dtype)
 	corner_maps, side_maps = maps
 	corner_side_idcs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-	corner_633map, side_633map = get_633maps(F, B, T, D, L, R)
 	oh_idcs = np.arange(20) * 24
+	corner_633map: np.ndarray
+	side_633map: np.ndarray
+
+	def __init__(self):
+		self._solved_state = self._get_2024solved()
+		self.corner_633map, self.side_633map = get_633maps(self.F, self.B, self.T, self.D, self.L, self.R)
 
 	@classmethod
 	def act(cls, state: np.ndarray, action: int):
@@ -206,14 +255,14 @@ class _Cube2024(_Environment):
 		Performs one move on the cube, specified by the side (0-5),
 		and whether the rotation is in a positive direction (0 for negative and 1 for positive)
 		"""
-		
+
 		return cls.maps[cls.corner_side_idcs, action, state].copy()
 
 	@classmethod
 	def multi_act(cls, states: np.ndarray, actions: np.ndarray):
 		repeated_actions = np.tile(actions, (12, 1)).ravel("F")
 		states = states.copy()
-		states[:, :8] = cls.corner_maps[repeated_actions[:8*len(actions)], states[:, :8].flat].reshape(-1, 8)
+		states[:, :8] = cls.corner_maps[repeated_actions[:8 * len(actions)], states[:, :8].flat].reshape(-1, 8)
 		states[:, 8:] = cls.side_maps[repeated_actions, states[:, 8:].flat].reshape(-1, 12)
 		return states
 
@@ -224,7 +273,7 @@ class _Cube2024(_Environment):
 		idcs = cls.oh_idcs + states
 		oh[0, idcs] = 1
 		return oh
-	
+
 	@classmethod
 	def multi_as_oh(cls, states: np.ndarray) -> torch.tensor:
 		oh = torch.zeros(states.shape[0], 480, device=gpu)
@@ -252,50 +301,42 @@ class _Cube2024(_Environment):
 			state633[cls.corner_633map[pos][0]] = values[0]
 			state633[cls.corner_633map[pos][1]] = values[1]
 			state633[cls.corner_633map[pos][2]] = values[2]
-		
+
 		for i in range(12):
 			# Inserts values for side i in position pos
-			pos = state[i+8] // 2
-			orientation = state[i+8] % 2
+			pos = state[i + 8] // 2
+			orientation = state[i + 8] % 2
 			values = np.roll([x[0] for x in cls.side_633map[i]], orientation)
 			state633[cls.side_633map[pos][0]] = values[0]
 			state633[cls.side_633map[pos][1]] = values[1]
-		
+
 		return state633
-	
-	@classmethod
-	def stringify(cls, state: np.ndarray):
-		return _stringify_cube(cls._as633(state))
 
 
+class _Cube686(_Cube):
 
-class _Cube686(_Environment):
-
-	action_dim = 12
-	action_space = np.arange(action_dim)
-	action_names = "F", "F'", "B", "B'", "T", "T'", "D", "D'", "L", "L'", "R", "R'"
 	oh_size = 288
-	_solved_state = _get_686solved(dtype)
-	
+
 	# No shame
-	_Cube686_n3_03    = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
-	_Cube686_n3_n13   = np.array([-1, -1, -1, 0, 0, 0, 1, 1, 1, 2, 2, 2])
-	adjacents         = np.array([6, 7, 0, 2, 3, 4, 4, 5, 6, 0, 1, 2])
-	rolled_adjecents  = np.roll(adjacents, 3)
-	roll_left         = np.array([2, 3, 4, 5, 6, 7, 0, 1])
-	roll_right        = np.array([6, 7, 0, 1, 2, 3, 4, 5])
-	neighbor_idcs_pos = [neighbors_686[[face]*12, _Cube686_n3_03] for face in np.arange(6)]
-	neighbor_idcs_neg = [neighbors_686[[face]*12, _Cube686_n3_n13] for face in np.arange(6)]
+	_Cube686_n3_03 = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
+	_Cube686_n3_n13 = np.array([-1, -1, -1, 0, 0, 0, 1, 1, 1, 2, 2, 2])
+	adjacents = np.array([6, 7, 0, 2, 3, 4, 4, 5, 6, 0, 1, 2])
+	rolled_adjecents = np.roll(adjacents, 3)
+	roll_left = np.array([2, 3, 4, 5, 6, 7, 0, 1])
+	roll_right = np.array([6, 7, 0, 1, 2, 3, 4, 5])
+	neighbor_idcs_pos = [neighbors_686[[face] * 12, _Cube686_n3_03] for face in np.arange(6)]
+	neighbor_idcs_neg = [neighbors_686[[face] * 12, _Cube686_n3_n13] for face in np.arange(6)]
 
 	# Maps an 8 long vector starting at (0, 0) in 3x3 onto a 9 long vector which can be reshaped to 3x3
 	map633 = np.array([0, 3, 6, 7, 8, 5, 2, 1])
 	# Number of times the 8 long vector has to be shifted to the left to start at (0, 0) in 3x3
 	shifts = np.array([0, 6, 6, 4, 2, 4])
 
-	solved_cuda = torch.from_numpy(_get_686solved(dtype)).to(gpu)
+	def __init__(self):
+		self._solved_instance = self._get_686solved()
 
 	@classmethod
-	def rotate(cls, state: np.ndarray, face: int, direction: int):
+	def act(cls, state: np.ndarray, action: int):
 		"""
 		Performs one move on the cube, specified by the side (0-5),
 		and if the direction is negative (0) or positive (1)
@@ -306,45 +347,42 @@ class _Cube686(_Environment):
 
 		if direction:
 			altered_state[face] = state[face, cls.roll_right]
-			altered_state[cls.neighbor_idcs_pos[face], cls.adjacents] = ini_state[cls._Cube686_n3_n13, cls.rolled_adjecents]
+			altered_state[cls.neighbor_idcs_pos[face], cls.adjacents] = ini_state[
+				cls._Cube686_n3_n13, cls.rolled_adjecents]
 		else:
 			altered_state[face] = state[face, cls.roll_left]
-			altered_state[cls.neighbor_idcs_neg[face], cls.rolled_adjecents] = ini_state[cls._Cube686_n3_03, cls.adjacents]
+			altered_state[cls.neighbor_idcs_neg[face], cls.rolled_adjecents] = ini_state[
+				cls._Cube686_n3_03, cls.adjacents]
 
 		return altered_state
 
 	@classmethod
-	def multi_rotate(cls, states: np.ndarray, faces: np.ndarray, directions: np.ndarray):
+	def multi_act(cls, states: np.ndarray, actions: np.ndarray):
 		altered_states = states.copy()
 		ini_states = np.array([state[n] for state, n in zip(states, neighbors_686[faces])])
 		for altered_state, state, ini_state, face, direction in zip(altered_states, states, ini_states, faces, directions):
 			if direction:
 				altered_state[face] = state[face, cls.roll_right]
-				altered_state[cls.neighbor_idcs_pos[face], cls.adjacents] = ini_state[cls._Cube686_n3_n13, cls.rolled_adjecents]
+				altered_state[cls.neighbor_idcs_pos[face], cls.adjacents] = ini_state[
+					cls._Cube686_n3_n13, cls.rolled_adjecents]
 			else:
 				altered_state[face] = state[face, cls.roll_left]
-				altered_state[cls.neighbor_idcs_neg[face], cls.rolled_adjecents] = ini_state[cls._Cube686_n3_03, cls.adjacents]
+				altered_state[cls.neighbor_idcs_neg[face], cls.rolled_adjecents] = ini_state[
+					cls._Cube686_n3_03, cls.adjacents]
 
 		return altered_states
 
-	@staticmethod
-	def as_oh(states: np.ndarray) -> torch.tensor:
+	@classmethod
+	def as_oh(cls, state: np.ndarray) -> torch.tensor:
 		# This representation is already one-hot encoded, so only ravelling is done
-		if len(states.shape) == 3:
-			states = np.expand_dims(states, 0)
-		states = torch.from_numpy(states.reshape(len(states), 288)).to(gpu).float()
-		return states
+		state = np.expand_dims(state, 0)
+		oh_state = torch.from_numpy(state.reshape(len(state), 288)).to(gpu).float()
+		return oh_state
 
 	@classmethod
-	def as_correct(cls, t: torch.tensor) -> torch.tensor:
-		"""
-		oh is a one-hot encoded tensor of shape n x 288 as produced by _Cube686.as_oh
-		This methods creates a correctness representation of the tensor of shape n x 6 x 8
-		"""
-		oh = t.reshape(len(t), 6, 8, 6).to(gpu)
-		correct_repr = torch.all(oh[:] == cls.solved_cuda, dim=3).long()
-		correct_repr[correct_repr==0] = -1
-		return correct_repr.float()
+	def multi_as_oh(cls, states: np.ndarray) -> torch.tensor:
+		oh_states = torch.from_numpy(states.reshape(len(states), 288)).to(gpu).float()
+		return oh_states
 
 	@classmethod
 	def _as633(cls, state: np.ndarray):
@@ -354,17 +392,15 @@ class _Cube686(_Environment):
 			state69[i, cls.map633] = np.roll(state68[i], -cls.shifts[i], axis=0)
 		return state69.reshape((6, 3, 3))
 
-	@classmethod
-	def stringify(cls, state: np.ndarray):
-		return _stringify_cube(cls._as633(state))
-
 
 _environments = {
 	"cube2024": _Cube2024,
 	"cube686": _Cube686
 }
 
+
 def get_env(env: str) -> _Environment:
 	assert env in _environments, f"Environment ('{env}' was specified) must be one of " + ", ".join(_environments.keys())
-	return _environments[env]
+	return _environments[env]()
+
 
