@@ -18,7 +18,6 @@ class ModelConfig:
 	_fc_big_arch    = { "shared_sizes": [8192, 4096, 2048], "part_sizes": [1024, 512] }
 	_res_small_arch = { "shared_sizes": [4096, 1024], "part_sizes": [512], "res_blocks": 4, "res_size": 1024 }
 	_res_big_arch   = { "shared_sizes": [8192, 4096, 2048], "part_sizes": [1024, 512], "res_blocks": 6, "res_size": 2048 }
-	_conv_arch      = { "shared_sizes": [4096, 2048], "part_sizes": [512], "conv_channels": [32, 64, 128], "cat_sizes": [2048] }
 
 	def __init__(self,
 				 activation_function=torch.nn.ELU(),
@@ -28,7 +27,7 @@ class ModelConfig:
 			):
 		self.activation_function = activation_function
 		self.batchnorm = batchnorm
-		self.architecture = self._backward_comp_arch(architecture)  # Options: 'fc_small', 'fc_big', 'res_small', 'res_big', 'conv'
+		self.architecture = architecture  # Options: 'fc_small', 'fc_big', 'res_small', 'res_big'
 		self.init = init  # Options: glorot, he or a number
 		self.is2024 = is2024
 
@@ -42,17 +41,6 @@ class ModelConfig:
 		if self.architecture.startswith("res"):
 			self.res_blocks = self._get_arch()["res_blocks"]
 			self.res_size = self._get_arch()["res_size"]
-
-		# CNN values
-		if self.architecture.startswith("conv"):
-			self.conv_channels = self._get_arch()["conv_channels"]
-			self.cat_sizes = self._get_arch()["cat_sizes"]
-	
-	def _backward_comp_arch(self, arch: str):
-		# Ensure backwards compatibility with older model configs
-		if arch in ["fc", "res"]:
-			return arch + "_small"
-		return arch
 
 	def _get_arch(self):
 		return getattr(self, f"_{self.architecture}_arch")
@@ -127,17 +115,10 @@ class Model(nn.Module):
 		self.policy_net = nn.Sequential(*self._create_fc_layers(policy_thiccness, True))
 		self.value_net = nn.Sequential(*self._create_fc_layers(value_thiccness, True))
 
-	def forward(self, x, policy=True, value=True):
-		assert policy or value
+	def forward(self, x: torch.tensor) -> torch.tensor:
 		x = self.shared_net(x)
-		return_values = []
-		if policy:
-			policy = self.policy_net(x)
-			return_values.append(policy)
-		if value:
-			value = self.value_net(x)
-			return_values.append(value)
-		return return_values if len(return_values) > 1 else return_values[0]
+		value = self.value_net(x)
+		return value
 
 	def _create_fc_layers(self, thiccness: list, final: bool):
 		"""
@@ -147,9 +128,12 @@ class Model(nn.Module):
 		layers = []
 		for i in range(len(thiccness)-1):
 			l = nn.Linear(thiccness[i], thiccness[i+1])
-			if self.config.init == 'glorot': torch.nn.init.xavier_uniform_(l.weight)
-			elif self.config.init == 'he': torch.nn.init.kaiming_uniform_(l.weight)
-			else: torch.nn.init.constant_(l.weight, float(self.config.init))
+			if self.config.init == 'glorot':
+				torch.nn.init.xavier_uniform_(l.weight)
+			elif self.config.init == 'he':
+				torch.nn.init.kaiming_uniform_(l.weight)
+			else:
+				torch.nn.init.constant_(l.weight, float(self.config.init))
 			layers.append(l)
 
 			if not (final and i == len(thiccness) - 2):
@@ -261,78 +245,3 @@ class ResNet(Model):
 		for i in range(self.config.res_blocks):
 			resblock = NonConvResBlock(self.config.res_size, self.config.activation_function, self.config.batchnorm)
 			self.shared_net.add_module(f'resblock{i}', resblock)
-
-
-class _CircularPad(nn.Module):
-	"""
-	Circular padding is broken in convolutional modules in pytorch 1.4 (supposedly fixed 1.5). Therefore this manual implementation
-	See https://github.com/pytorch/pytorch/issues/20981 and https://github.com/kornia/kornia/pull/478
-	"""
-	def __init__(self, padding: list):
-		super().__init__()
-		self.padding = padding
-
-	def forward(self, x):
-		return F.pad(x, self.padding, mode="circular")
-
-class ConvNet(Model):
-
-	shared_conv_net: nn.Sequential
-	cat_net: nn.Sequential
-
-	# x -> conv layers                 policy layers
-	#                   > cat layer <
-	# x -> fc layers                   value layers
-
-	def _construct_net(self):
-
-		# Creates all convolutional layers
-		channels_list = [6, *self.config.conv_channels]
-		cat_input_size = channels_list[-1] * 8 + self.config.shared_sizes[-1]
-		# First convolutional layer has stride of two and special padding
-		conv_layers = [_CircularPad([1, 1]), nn.Conv1d(channels_list[0], channels_list[1], kernel_size=3, stride=1)]
-		if self.config.batchnorm:
-			conv_layers.append(nn.BatchNorm1d(channels_list[1]))
-		# Rest have stride of one and normal padding
-		for in_channels, out_channels in zip(channels_list[1:-1], channels_list[2:]):
-			conv_layers.append(_CircularPad([1, 1]))
-			conv_layers.append(nn.Conv1d(in_channels, out_channels, 3))
-			conv_layers.append(self.config.activation_function)
-			if self.config.batchnorm:
-				conv_layers.append(nn.BatchNorm1d(out_channels))
-		self.shared_conv_net = nn.Sequential(*conv_layers)
-
-		# Creates concatenation layers
-		# Its input size is the raveled conv size + fc output size
-		# Its output size is fc output size, as this is also the input size for the policy and value nets
-		cat_layers = []
-		cat_sizes = [cat_input_size] + self.config.cat_sizes
-		for in_size, out_size in zip(cat_sizes[:-1], cat_sizes[1:]):
-			cat_layers.append(nn.Linear(in_size, out_size))
-			cat_layers.append(self.config.activation_function)
-			if self.config.batchnorm:
-				cat_layers.append(nn.BatchNorm1d(out_size))
-		self.cat_net = nn.Sequential(*cat_layers)
-
-		# Constructs the rest of the network
-		super()._construct_net(cat_sizes[-1])
-
-	def forward(self, x, policy=True, value=True):
-		assert policy or value
-
-		# Shared part of network
-		fc_out = self.shared_net(x)
-		conv_out = self.shared_conv_net(cube.as_correct(x)).view(len(x), -1)
-		x = torch.cat([fc_out, conv_out], dim=1)
-		x = self.cat_net(x)
-
-		# Policy and value parts
-		return_values = []
-		if policy:
-			policy = self.policy_net(x)
-			return_values.append(policy)
-		if value:
-			value = self.value_net(x)
-			return_values.append(value)
-		return return_values if len(return_values) > 1 else return_values[0]
-
