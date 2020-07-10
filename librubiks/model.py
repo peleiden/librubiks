@@ -1,3 +1,4 @@
+from abc import ABC
 import json
 import os
 from time import time
@@ -7,123 +8,92 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from librubiks import cube
-from librubiks import gpu
+from librubiks import gpu, envs
 from librubiks.utils import NullLogger
 
 
 class ModelConfig:
 
-	_fc_small_arch  = { "shared_sizes": [4096, 2048], "part_sizes": [512] }
-	_fc_big_arch    = { "shared_sizes": [8192, 4096, 2048], "part_sizes": [1024, 512] }
-	_res_small_arch = { "shared_sizes": [4096, 1024], "part_sizes": [512], "res_blocks": 4, "res_size": 1024 }
-	_res_big_arch   = { "shared_sizes": [8192, 4096, 2048], "part_sizes": [1024, 512], "res_blocks": 6, "res_size": 2048 }
+	activation_functions = {
+		"elu":   nn.ELU(),
+		"relu":  nn.ReLU(),
+		"relu6": nn.ReLU6(),
+		"lrelu": nn.LeakyReLU(),
+	}
 
 	def __init__(self,
-				 activation_function=torch.nn.ELU(),
-				 batchnorm=True, architecture="fc_small",
-				 init="glorot",
-				 is2024=True,
+				 env_key: str,
+				 layer_sizes: list   = [4096, 2048, 512],
+				 activation_function = "elu",
+				 batchnorm: bool     = True,
+				 dropout: float      = 0,
+				 architecture: str   = "fc",
+				 init: str           = "glorot",
+				 id: int             = None
 			):
+		assert type(layer_sizes) == list,\
+			f"Layers must be a list of integer sizes, not {type(layer_sizes)}"
+		assert activation_function in self.activation_functions.keys(),\
+			"Activation function must be one of " + ", ".join(self.activation_functions.keys()) + f", not {activation_function}"
+		assert type(batchnorm) == bool,\
+			f"Batchnorm must a boolean, not {batchnorm}"
+		assert 0 <= dropout <= 1,\
+			f"Dropout must be in [0, 1], not {dropout}"
+		assert architecture in ["fc", "res"],\
+			f"Architecture must be fc (fully-connected) or res (fc with residual blocks), not {architecture}"
+		assert init == "glorot" or init == "he" or type(init) == int or type(init) == float,\
+			f"Init must be glorot, he, or a number, not {init}"
+
+		self.env_key = env_key
+		self.layer_sizes = layer_sizes
 		self.activation_function = activation_function
 		self.batchnorm = batchnorm
-		self.architecture = architecture  # Options: 'fc_small', 'fc_big', 'res_small', 'res_big'
-		self.init = init  # Options: glorot, he or a number
-		self.is2024 = is2024
+		self.architecture = architecture
+		self.dropout = dropout
+		self.init = init
 
-		self.id = hash(time())
-
-		# General purpose values
-		self.shared_sizes = self._get_arch()["shared_sizes"]
-		self.part_sizes = self._get_arch()["part_sizes"]
-
-		# ResNet values
-		if self.architecture.startswith("res"):
-			self.res_blocks = self._get_arch()["res_blocks"]
-			self.res_size = self._get_arch()["res_size"]
-
-	def _get_arch(self):
-		return getattr(self, f"_{self.architecture}_arch")
-
-	@classmethod
-	def _get_non_serializable(cls):
-		return { "activation_function": cls._get_activation_function }
+		self.id = id or hash(time())
+	
+	def get_af(self):
+		return self.activation_functions[self.activation_function]
 
 	def as_json_dict(self):
-		d = deepcopy(self.__dict__)
-		for key in ["shared_sizes", "part_sizes", "res_blocks", "res_size", "conv_channels", "cat_sizes"]:
-			d.pop(key, None)
-		for a, f in self._get_non_serializable().items():
-			d[a] = f(d[a], False)
-		return d
+		return deepcopy(self.__dict__)
 
 	@classmethod
 	def from_json_dict(cls, conf: dict):
-		for a, f in cls._get_non_serializable().items():
-			conf[a] = f(conf[a], True)
 		return ModelConfig(**conf)
 
-	@staticmethod
-	def _get_activation_function(val, from_key: bool):
-		afs = {"elu": torch.nn.ELU(), "relu": torch.nn.ReLU()}
-		if from_key:
-			return afs[val]
-		else:
-			return [x for x in afs if type(afs[x]) == type(val)][0]
 
-
-class Model(nn.Module):
+class Model(nn.Module, ABC):
 	"""
 	A fully connected, feed forward Neural Network.
 	Also the instantiator class of other network architectures through `create`.
 	"""
-	shared_net: nn.Sequential
-	policy_net: nn.Sequential
-	value_net: nn.Sequential
 
-	def __init__(self, config: ModelConfig, logger=NullLogger()):
+	layers: nn.Sequential
+
+	def __init__(self, config: ModelConfig, logger = NullLogger()):
 		super().__init__()
 		self.config = config
+		self.env = envs.get_env(self.config.env_key)
 		self.log = logger
 
 		self._construct_net()
 		self.log(f"Created network\n{self.config}\n{self}")
 
-	@staticmethod
-	def create(config: ModelConfig, logger=NullLogger()):
-		"""
-		Allows this class to be used to instantiate other Network architectures based on the content
-		of the configuartion file.
-		"""
-		if config.architecture.startswith("fc"):  return Model(config, logger).to(gpu)
-		if config.architecture.startswith("res"): return ResNet(config, logger).to(gpu)
-		if config.architecture == "conv":         return ConvNet(config, logger).to(gpu)
-
-		raise KeyError(f"Network architecture should be 'fc_small', 'fc_big', 'res_small', 'res_big', 'conv', but '{config.architecture}' was given")
-
-	def _construct_net(self, pv_input_size: int=None):
-		"""
-		Constructs a feed forward fully connected DNN.
-		"""
-		pv_input_size =  self.config.shared_sizes[-1] if pv_input_size is None else pv_input_size
-
-		shared_thiccness = [cube.get_oh_shape(), *self.config.shared_sizes]
-		policy_thiccness = [pv_input_size, *self.config.part_sizes, cube.action_dim]
-		value_thiccness = [pv_input_size, *self.config.part_sizes, 1]
-
-		self.shared_net = nn.Sequential(*self._create_fc_layers(shared_thiccness, False))
-		self.policy_net = nn.Sequential(*self._create_fc_layers(policy_thiccness, True))
-		self.value_net = nn.Sequential(*self._create_fc_layers(value_thiccness, True))
+	def _construct_net(self):
+		"""Constructs self.layers based on self.config"""
+		raise NotImplementedError
 
 	def forward(self, x: torch.tensor) -> torch.tensor:
-		x = self.shared_net(x)
-		value = self.value_net(x)
-		return value
+		x = self.layers(x)
+		return x
 
-	def _create_fc_layers(self, thiccness: list, final: bool):
+	def _create_fc_layers(self, thiccness: list):
 		"""
-		Helper function to return fully connected feed forward layers given a list of layer sizes and
-		a final output size.
+		Helper function to return fully connected feed forward layers given a list of layer sizes and a final output size.
+		TODO: Dropout, and only do it if config.dropout != 0 so it will not waste time if not given
 		"""
 		layers = []
 		for i in range(len(thiccness)-1):
@@ -136,72 +106,35 @@ class Model(nn.Module):
 				torch.nn.init.constant_(l.weight, float(self.config.init))
 			layers.append(l)
 
-			if not (final and i == len(thiccness) - 2):
-				layers.append(self.config.activation_function)
+			if i != len(thiccness) - 2:
+				layers.append(self.config.get_af())
 				if self.config.batchnorm:
 					layers.append(nn.BatchNorm1d(thiccness[i+1]))
 
 		return layers
 
-	def clone(self):
+	def clone(self) -> nn.Module:
 		new_state_dict = {}
 		for kw, v in self.state_dict().items():
 			new_state_dict[kw] = v.clone()
-		new_net = Model.create(self.config)
+		new_net = create_net(self.config)
 		new_net.load_state_dict(new_state_dict)
 		return new_net
 
-	def get_params(self):
+	def get_params(self) -> torch.tensor:
 		return torch.cat([x.float().flatten() for x in self.state_dict().values()]).clone()
 
-	def save(self, save_dir: str, is_min=False):
-		"""
-		Save the model and configuration to the given directory
-		The folder will include a pytorch model, and a json configuration file
-		"""
 
-		os.makedirs(save_dir, exist_ok=True)
-		if is_min:
-			model_path = os.path.join(save_dir, "model-best.pt")
-			torch.save(self.state_dict(), model_path)
-			self.log(f"Saved min model to {model_path}")
-			return
-		model_path = os.path.join(save_dir, "model.pt")
-		torch.save(self.state_dict(), model_path)
-		conf_path = os.path.join(save_dir, "config.json")
-		with open(conf_path, "w", encoding="utf-8") as conf:
-			json.dump(self.config.as_json_dict(), conf, indent=4)
-		self.log(f"Saved model to {model_path} and configuration to {conf_path}")
+class _FullyConnected(Model):
+	"""
+	A fully-connected network with no fancyness
+	"""
+	def _construct_net(self):
+		layer_sizes = [self.env.oh_size, *self.config.layer_sizes, 1]
+		layers = self._create_fc_layers(layer_sizes)
+		self.layers = nn.Sequential(*layers)
 
-	@staticmethod
-	def load(load_dir: str, logger=NullLogger(), load_best=False):
-		"""
-		Load a model from a configuration directory
-		"""
-
-		model_path = os.path.join(load_dir, "model.pt" if not load_best else "model-best.pt")
-		conf_path = os.path.join(load_dir, "config.json")
-		with open(conf_path, encoding="utf-8") as conf:
-			try:
-				state_dict = torch.load(model_path, map_location=gpu)
-			except FileNotFoundError:
-				model_path = os.path.join(load_dir, "model.pt")
-				state_dict = torch.load(model_path, map_location=gpu)
-			config = ModelConfig.from_json_dict(json.load(conf))
-
-		model = Model.create(config, logger)
-		model.load_state_dict(state_dict)
-		model.to(gpu)
-		# First time the net is loaded, a feedforward is performed, as the first time is slow
-		# This avoids skewing evaluation results
-		with torch.no_grad():
-			model.eval()
-			model(cube.as_oh(cube.get_solved()))
-			model.train()
-		return model
-
-
-class NonConvResBlock(nn.Module):
+class _NonConvResBlock(nn.Module):
 	"""
 	A residual block of two linear layers with the same size.
 	"""
@@ -229,7 +162,8 @@ class NonConvResBlock(nn.Module):
 		x = self.activate(x)
 		return x
 
-class ResNet(Model):
+
+class _ResNet(Model):
 	"""
 	A Linear Residual Neural Network.
 	"""
@@ -237,11 +171,67 @@ class ResNet(Model):
 	#  x-> fc layers -> residual blocks
 	#				    \-> value fc layer(s)
 	def _construct_net(self):
-		# Resblock class is very simple currently (does not change size), so its input must match the res_size
-		assert self.config.shared_sizes[-1] == self.config.res_size or (not self.config.shared_sizes and self.config.res_size == cube.get_oh_shape())
+		# FIXME: This is currently broken
+		# TODO: Better implementation of res blocks, so they can have different sizes
 
-		# Uses FF constructor to set up feed forward nets. Resblocks are added only to shared net
-		super()._construct_net( pv_input_size = self.config.res_size )
 		for i in range(self.config.res_blocks):
-			resblock = NonConvResBlock(self.config.res_size, self.config.activation_function, self.config.batchnorm)
+			resblock = _NonConvResBlock(self.config.res_size, self.config.activation_function, self.config.batchnorm)
 			self.shared_net.add_module(f'resblock{i}', resblock)
+
+
+def create_net(config: ModelConfig, logger = NullLogger()) -> Model:
+	"""
+	Allows this class to be used to instantiate other Network architectures based on the content
+	of the configuartion file.
+	"""
+	if config.architecture == "fc":  return _FullyConnected(config, logger).to(gpu)
+	if config.architecture == "res": return _ResNet(config, logger).to(gpu)
+
+	raise KeyError(f"Network architecture should be 'fc' or 'res', but '{config.architecture}' was given")
+
+
+def save_net(net: Model, save_dir: str, is_best = False):
+	"""
+	Save the model and configuration to the given directory
+	The folder will include a pytorch model, and a json configuration file
+	"""
+
+	os.makedirs(save_dir, exist_ok=True)
+	if is_best:
+		model_path = os.path.join(save_dir, "model-best.pt")
+		torch.save(net.state_dict(), model_path)
+		net.log(f"Saved best model to {model_path}")
+		return
+	model_path = os.path.join(save_dir, "model.pt")
+	torch.save(net.state_dict(), model_path)
+	conf_path = os.path.join(save_dir, "config.json")
+	with open(conf_path, "w", encoding="utf-8") as conf:
+		json.dump(net.config.as_json_dict(), conf, indent=4)
+	net.log(f"Saved model to {model_path} and configuration to {conf_path}")
+
+
+def load_net(load_dir: str, logger = NullLogger(), load_best = False) -> Model:
+	"""Load a model from a configuration directory"""
+
+	model_path = os.path.join(load_dir, "model.pt" if not load_best else "model-best.pt")
+	conf_path = os.path.join(load_dir, "config.json")
+	with open(conf_path, encoding="utf-8") as conf:
+		try:
+			state_dict = torch.load(model_path, map_location=gpu)
+		except FileNotFoundError:
+			model_path = os.path.join(load_dir, "model.pt")
+			state_dict = torch.load(model_path, map_location=gpu)
+		config = ModelConfig.from_json_dict(json.load(conf))
+
+	model = create_net(config, logger)
+	model.load_state_dict(state_dict)
+	model.to(gpu)
+	# First time the net is loaded, a feedforward is performed, as the first time is slow
+	# This avoids skewing evaluation results
+	env = envs.get_env(config.env_key)
+	with torch.no_grad():
+		model.eval()
+		model(env.as_oh(env.get_solved()))
+		model.train()
+	return model
+
