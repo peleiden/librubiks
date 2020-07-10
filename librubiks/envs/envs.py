@@ -404,12 +404,3 @@ environments = {
 def get_env(env: str) -> Environment:
 	assert env in environments, f"Environment must be one of " + ", ".join(environments.keys()) + f", not {env}"
 	return environments[env](env)
-
-
-if __name__ == "__main__":
-	env = _Cube2024("cube2024")
-	state = env.get_solved()
-	for action in env.action_space:
-		print("ACTION", action)
-		print(env.stringify(env.act(state, action)))
-
