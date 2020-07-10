@@ -15,7 +15,7 @@ from librubiks.utils import Logger, NullLogger, set_seeds
 from librubiks.solving.evaluation import Evaluator
 
 from librubiks.solving import agents
-from librubiks.model import Model
+from librubiks.model import Model, load_net
 
 np.set_printoptions(threshold=np.inf)
 
@@ -241,7 +241,7 @@ def agent_optimize():
 		def prepper(params): return params
 
 		persistent_params = {
-			'net': Model.load(args.location, load_best=args.use_best),
+			'net': load_net(args.location, load_best=args.use_best),
 			'search_graph': True,
 		}
 	elif agent_name == 'AStar':
@@ -254,7 +254,7 @@ def agent_optimize():
 			return params
 
 		persistent_params = {
-			'net': Model.load(args.location, load_best=args.use_best),
+			'net': load_net(args.location, load_best=args.use_best),
 		}
 	elif agent_name == 'EGVM':
 		params = {
@@ -269,7 +269,7 @@ def agent_optimize():
 			return params
 
 		persistent_params = {
-			'net': Model.load(args.location, load_best=args.use_best),
+			'net': load_net(args.location, load_best=args.use_best),
 		}
 	else:
 		raise NameError(f"{agent_name} does not correspond to a known agent, please pick either AStar, MCTS or EGVM")

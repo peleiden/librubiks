@@ -5,14 +5,14 @@ import torch
 from tests import MainTest
 
 from librubiks import gpu
-from librubiks.model import Model, ModelConfig
+from librubiks.model import Model, ModelConfig, create_net, load_net, save_net
 from librubiks.utils import NullLogger
 
 
 class TestModel(MainTest):
 	def test_model(self):
 		config = ModelConfig()
-		model = Model.create(config)
+		model = create_net(config)
 		assert next(model.parameters()).device.type == gpu.type
 		model.eval()
 		x = torch.randn(2, 480).to(gpu)
@@ -22,7 +22,7 @@ class TestModel(MainTest):
 
 	def test_resnet(self):
 		config = ModelConfig(architecture = 'res_big')
-		model = Model.create(config)
+		model = create_net(config)
 		assert next(model.parameters()).device.type == gpu.type
 		model.eval()
 		x = torch.randn(2, 480).to(gpu)
@@ -34,13 +34,13 @@ class TestModel(MainTest):
 		torch.manual_seed(42)
 
 		config = ModelConfig()
-		model = Model.create(config, logger=NullLogger())
+		model = create_net(config, logger=NullLogger())
 		model_dir = "local_tests/local_model_test"
-		model.save(model_dir)
+		save_net(model, model_dir)
 		assert os.path.exists(f"{model_dir}/config.json")
 		assert os.path.exists(f"{model_dir}/model.pt")
 
-		model = Model.load(model_dir).to(gpu)
+		model = load_net(model_dir).to(gpu)
 		assert next(model.parameters()).device.type == gpu.type
 
 	def test_model_config(self):
@@ -54,6 +54,6 @@ class TestModel(MainTest):
 	def test_init(self):
 		for init in ['glorot', 'he', 0, 1.123123123e-3]:
 			cf = ModelConfig(init=init)
-			model = Model.create(cf)
+			model = create_net(cf)
 			x = torch.randn(2,480).to(gpu)
 			model(x)

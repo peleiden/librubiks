@@ -10,7 +10,7 @@ import torch
 from librubiks.cube import get_is2024, with_used_repr, store_repr, restore_repr, set_is2024
 from librubiks.utils import get_commit, Logger
 
-from librubiks.model import Model, ModelConfig
+from librubiks.model import Model, ModelConfig, create_net, save_net, load_net
 from librubiks.train import Train
 
 from librubiks.solving import agents
@@ -125,11 +125,11 @@ class TrainJob:
 					  )
 		self.logger(f"Rough upper bound on total evaluation time during training: {len(train.evaluation_rollouts)*self.evaluator.approximate_time()/60:.2f} min")
 
-		net = Model.create(self.model_cfg, self.logger)
+		net = create_net(self.model_cfg, self.logger)
 		net, min_net = train.train(net)
-		net.save(self.location)
+		save_net(net, self.location)
 		if self.evaluation_interval:
-			min_net.save(self.location, True)
+			save_net(min_net, self.location, True)
 
 		train.plot_training(self.location, name=self.name)
 		analysispath = os.path.join(self.location, "analysis")

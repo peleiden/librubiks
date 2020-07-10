@@ -5,7 +5,7 @@ import numpy as np
 
 from tests import MainTest
 from librubiks.solving.hyper_optim import Optimizer, BayesianOptimizer, GridSearch
-from librubiks.model import ModelConfig, Model
+from librubiks.model import ModelConfig, Model, save_net
 
 
 class TestOptimizer(MainTest):
@@ -34,7 +34,7 @@ class TestOptimizer(MainTest):
 		location = 'local_tests/optim'
 
 		net = Model(ModelConfig())
-		net.save(location)
+		save_net(net, location)
 		for agent in agents:
 
 			run_settings = { 'location': location, 'agent': agent, 'iterations': 1, 'eval_games': 1, 'depth': 2, 'save_optimal': True, 'use_best': True, 'optimizer': 'BO' }

@@ -5,7 +5,7 @@ from tests import MainTest
 
 from librubiks import gpu
 from librubiks import cube
-from librubiks.model import Model, ModelConfig
+from librubiks.model import Model, ModelConfig, create_net, load_net, save_net
 
 from librubiks.solving.agents import Agent, RandomSearch, BFS, PolicySearch, ValueSearch, EGVM, MCTS, AStar
 
@@ -17,7 +17,7 @@ def _action_queue_test(state, agent, sol_found):
 
 class TestAgents(MainTest):
 	def test_agents(self):
-		net = Model.create(ModelConfig())
+		net = create_net(ModelConfig())
 		agents = [
 			RandomSearch(),
 			BFS(),
@@ -47,7 +47,7 @@ class TestMCTS(MainTest):
 		_action_queue_test(state, agent, sol_found)
 
 	def _mcts_test(self, state: np.ndarray, search_graph: bool):
-		agent = MCTS(Model.create(ModelConfig()), c=1, search_graph=search_graph)
+		agent = MCTS(create_net(ModelConfig()), c=1, search_graph=search_graph)
 		solved = agent.search(state, .2)
 
 		# Indices
@@ -103,7 +103,7 @@ class TestAStar(MainTest):
 			(0.5, 2),
 			(1, 1),
 		}
-		net = Model.create(ModelConfig()).eval()
+		net = create_net(ModelConfig()).eval()
 		for params in test_params:
 			agent = AStar(net, *params)
 			self._can_win_all_easy_games(agent)
@@ -120,7 +120,7 @@ class TestAStar(MainTest):
 			assert cube.is_solved(state)
 
 	def test_expansion(self):
-		net = Model.create(ModelConfig()).eval()
+		net = create_net(ModelConfig()).eval()
 		init_state, _, _ = cube.scramble(3)
 		agent = AStar(net, lambda_=0.1, expansions=5)
 		agent.search(init_state, time_limit=1)
@@ -134,7 +134,7 @@ class TestAStar(MainTest):
 			assert agent.parents[idx] == init_idx
 
 	def test_cost(self):
-		net = Model.create(ModelConfig()).eval()
+		net = create_net(ModelConfig()).eval()
 		games = 5
 		states, _ = cube.sequence_scrambler(games, 1, True)
 		agent = AStar(net, lambda_=1, expansions=2)

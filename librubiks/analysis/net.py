@@ -3,13 +3,13 @@ import numpy as np
 import torch
 
 from librubiks import gpu, no_grad
-from librubiks import cube
-from librubiks.model import Model
+from librubiks import envs
+from librubiks.model import Model, load_net
 from librubiks.utils import TickTock, Logger
 
 tt = TickTock()
 log = Logger("data/local_analyses/net.log", "Analyzing MCTS")
-net = Model.load("data/local_method_comparison/asgerfix").eval().to(gpu)
+net = load_net("data/local_method_comparison/asgerfix").eval().to(gpu)
 
 
 def _get_adi_ff_slices(b, n):

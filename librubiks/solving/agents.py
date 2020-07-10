@@ -8,7 +8,7 @@ import torch
 from librubiks.utils import TickTock
 
 from librubiks import gpu, no_grad
-from librubiks.model import Model
+from librubiks.model import Model, load_net
 
 
 class Agent(ABC):
@@ -70,7 +70,7 @@ class DeepAgent(Agent, ABC):
 
 	@classmethod
 	def from_saved(cls, loc: str, use_best: bool):
-		net = Model.load(loc, load_best=use_best)
+		net = load_net(loc, load_best=use_best)
 		net.to(gpu)
 		return cls(net)
 
@@ -382,7 +382,7 @@ class AStar(DeepAgent):
 
 	@classmethod
 	def from_saved(cls, loc: str, use_best: bool, lambda_: float, expansions: int) -> DeepAgent:
-		net = Model.load(loc, load_best=use_best).to(gpu)
+		net = load_net(loc, load_best=use_best).to(gpu)
 		return cls(net, lambda_=lambda_, expansions=expansions)
 
 	def __len__(self) -> int:
