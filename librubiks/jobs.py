@@ -221,21 +221,10 @@ class EvalJob:
 			self.agents, self.reps, agents_args = {}, {}, {}
 
 			#DeepAgents need specific arguments
-			if agent == agents.MCTS:
-				assert mcts_c >= 0, f"Exploration parameter c must be 0 or larger, not {mcts_c}"
-				agents_args = { 'c': mcts_c, 'search_graph': mcts_graph_search }
-			elif agent == agents.PolicySearch:
-				assert isinstance(policy_sample, bool)
-				agents_args = { 'sample_policy': policy_sample }
-			elif agent == agents.AStar:
+			if agent == agents.AStar:
 				assert isinstance(astar_lambda, float) and 0 <= astar_lambda <= 1, "AStar lambda must be float in [0, 1]"
 				assert isinstance(astar_expansions, int) and astar_expansions >= 1 and (not max_states or astar_expansions < max_states) , "Expansions must be int < max states"
 				agents_args = { 'lambda_': astar_lambda, 'expansions': astar_expansions }
-			elif agent == agents.EGVM:
-				assert isinstance(egvm_epsilon, float) and 0 <= egvm_epsilon <= 1, "EGVM epsilon must be float in [0, 1]"
-				assert isinstance(egvm_workers, int) and egvm_workers >= 1, "Number of EGWM workers must a natural number"
-				assert isinstance(egvm_depth, int) and egvm_depth >= 1, "EGWM depth must be a natural number"
-				agents_args = { 'epsilon': egvm_epsilon, 'workers': egvm_workers, 'depth': egvm_depth }
 			else:  # Non-parametric methods go brrrr
 				agents_args = {}
 
@@ -246,12 +235,11 @@ class EvalJob:
 				store_repr()
 				with open(f"{folder}/config.json") as f:
 					cfg = json.load(f)
-				if optimized_params and agent in [agents.MCTS, agents.AStar]:
+				if optimized_params and agent in [agents.AStar]:
 					parampath = os.path.join(folder, f'{agent_string}_params.json')
 					if os.path.isfile(parampath):
 						with open(parampath, 'r') as paramfile:
 							agents_args = json.load(paramfile)
-							if agent == agents.MCTS: agents_args['search_graph'] = mcts_graph_search
 					else:
 						self.logger.log(f"Optimized params was set to true, but no file {parampath} was found, proceding with arguments for this {agent_string}.")
 
