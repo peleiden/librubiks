@@ -9,8 +9,10 @@ from flask_cors import CORS
 import numpy as np
 import torch
 
-from librubiks import cube
-from librubiks.solving.agents import RandomSearch, BFS, PolicySearch, MCTS, AStar, EGVM, ValueSearch
+from librubiks import envs
+from librubiks.solving.agents import RandomSearch, BFS, AStar, ValueSearch
+
+env = envs.get_env("cube2024")
 
 app = Flask(__name__)
 api = Api(app)
@@ -23,15 +25,10 @@ download(url % "model-best.pt", net_loc)
 download(url % "config.json", net_loc)
 
 astar_params = { "lambda_": 0.07, "expansions": 27 }
-mcts_params  = { "c": 4.13 }
-egvm_params  = { "epsilon": 0.375, "workers": 10, "depth": 50 }
 
 agents = [
 	{ "name": "A*",             "agent": AStar.from_saved(net_loc, use_best=True, **astar_params) },
-	{ "name": "MCTS",           "agent": MCTS.from_saved(net_loc, use_best=True, **mcts_params, search_graph=True) },
-	{ "name": "Greedy policy",  "agent": PolicySearch.from_saved(net_loc, use_best=True) },
 	{ "name": "Greedy value",   "agent": ValueSearch.from_saved(net_loc, use_best=True) },
-	{ "name": "EGVM",           "agent": EGVM.from_saved(net_loc, use_best=True, **egvm_params) },
 	{ "name": "BFS",            "agent": BFS() },
 	{ "name": "Random actions", "agent": RandomSearch()},
 ]
@@ -45,7 +42,7 @@ def get_info():
 	return jsonify({
 		"cuda": torch.cuda.is_available(),
 		"agents": [x["name"] for x in agents],
-		"parameters": { "A*": astar_params, "MCTS": mcts_params, "EGVM": egvm_params }
+		"parameters": { "A*": astar_params }
 	})
 
 @app.route("/solve", methods=["POST"])
@@ -53,7 +50,7 @@ def solve():
 	data = literal_eval(request.data.decode("utf-8"))
 	time_limit = data["timeLimit"]
 	agent = agents[data["agentIdx"]]["agent"]
-	state = np.array(data["state"], dtype=cube.dtype)
+	state = np.array(data["state"], dtype=env.dtype)
 	solution_found = agent.search(state, time_limit)
 	return jsonify({
 		"solution": solution_found,
