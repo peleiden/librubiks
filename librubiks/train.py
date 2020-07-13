@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from librubiks import gpu, no_grad, reset_cuda, rc_params
-from librubiks.utils import Logger, NullLogger, unverbose, TickTock, TimeUnit, bernoulli_error
+from librubiks.utils import Logger, NullLogger, unverbose, TickTock, TimeUnit
 
 from librubiks import envs
 from librubiks.analysis import TrainAnalysis
@@ -14,7 +14,6 @@ from librubiks.model import Model
 
 from librubiks.solving.agents import DeepAgent
 from librubiks.solving.evaluation import Evaluator
-plt.rcParams.update(rc_params)
 
 
 @dataclass
@@ -306,52 +305,6 @@ class Train:
 		generator_net.load_state_dict(new_genparams)
 		self.tt.end_profile("Creating generator network")
 		return generator_net.to(gpu)
-
-	def plot_training(self, save_dir: str, name: str, semi_logy=False, show=False):
-		"""
-		Visualizes training by showing training loss + evaluation reward in same plot
-		"""
-		self.log("Making plot of training")
-		fig, loss_ax = plt.subplots(figsize=(23, 10))
-
-		colour = "red"
-		loss_ax.set_ylabel("Training loss")
-		loss_ax.plot(self.train_rollouts, self.train_losses,  linewidth=3,                        color=colour,   label="Training loss")
-		loss_ax.plot(self.train_rollouts, self.policy_losses, linewidth=2, linestyle="dashdot",   color="orange", label="Policy loss")
-		loss_ax.plot(self.train_rollouts, self.value_losses,  linewidth=2, linestyle="dashed",    color="green",  label="Value loss")
-		loss_ax.tick_params(axis='y', labelcolor=colour)
-		loss_ax.set_xlabel(f"Rollout, each of {TickTock.thousand_seps(self.states_per_rollout)} states")
-		loss_ax.set_ylim(np.array([-0.05*1.35, 1.35]) * self.train_losses.max())
-		h1, l1 = loss_ax.get_legend_handles_labels()
-
-		if len(self.evaluation_rollouts):
-			color = 'blue'
-			reward_ax = loss_ax.twinx()
-			reward_ax.set_ylim([-5, 105])
-			reward_ax.set_ylabel("Solve rate (~95 % CI) [%]")
-			sol_shares = np.array(self.sol_percents)
-			bernoulli_errors = bernoulli_error(sol_shares, self.evaluator.n_games, alpha=0.05)
-			reward_ax.errorbar(self.evaluation_rollouts, sol_shares*100, bernoulli_errors*100, fmt="-o",
-				capsize=10, color=color, label="Policy performance", errorevery=2, alpha=0.8)
-			reward_ax.tick_params(axis='y', labelcolor=color)
-			h2, l2 = reward_ax.get_legend_handles_labels()
-			h1 += h2
-			l1 += l2
-		loss_ax.legend(h1, l1, loc=2)
-
-		title = (f"Training - {TickTock.thousand_seps(self.rollouts*self.rollout_games*self.rollout_depth)} states")
-		plt.title(title)
-		fig.tight_layout()
-		if semi_logy: plt.semilogy()
-		plt.grid(True)
-
-		os.makedirs(save_dir, exist_ok=True)
-		path = os.path.join(save_dir, f"training_{name}.png")
-		plt.savefig(path)
-		self.log(f"Saved loss and evaluation plot to {path}")
-
-		if show: plt.show()
-		plt.clf()
 
 	@staticmethod
 	def _get_batches(size: int, bsize: int):
