@@ -1,4 +1,5 @@
 import os
+import json
 from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
@@ -27,8 +28,31 @@ class TrainData:
 	evaluation_results: np.ndarray  # Solve shares
 
 	def save(self, loc: str):
-		# TODO
-		raise NotImplementedError
+		os.makedirs(loc, exist_ok=True)
+		with open(f"{loc}/traindata.json", "w", encoding="utf-8") as f:
+			json.dump({
+				"states_per_rollout": self.states_per_rollout,
+				"rollouts": self.rollouts,
+				"rollout_games": self.rollout_games,
+				"rollout_depth": self.rollout_depth,
+			}, f)
+		np.save(f"{loc}/trainlosses.npy", self.losses)
+		np.save(f"{loc}/evaluation_rollouts.npy", self.evaluation_rollouts)
+		np.save(f"{loc}/evaluation_results.npy", self.evaluation_results)
+	
+	@staticmethod
+	def load(loc: str):
+		with open(f"{loc}/traindata.json", encoding="utf-8") as f:
+			cfg = json.load(f)
+		return TrainData(
+			states_per_rollout  = cfg["states_per_rollout"],
+			rollouts            = cfg["rollouts"],
+			rollout_games       = cfg["rollout_games"],
+			rollout_depth       = cfg["rollout_depth"],
+			losses              = np.load(f"{loc}/trainlosses.npy"),
+			evaluation_rollouts = np.load(f"{loc}/evaluation_rollouts.npy"),
+			evaluation_results  = np.load(f"{loc}/evaluation_results.npy"),
+		)
 
 
 class BatchFeedForward:
