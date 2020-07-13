@@ -122,14 +122,14 @@ class TrainJob:
 					  evaluation_interval	= self.evaluation_interval,
 					  evaluator				= self.evaluator,
 					  with_analysis			= self.analysis,
-					  )
+			)
 		self.logger(f"Rough upper bound on total evaluation time during training: {len(train.evaluation_rollouts)*self.evaluator.approximate_time()/60:.2f} min")
 
 		net = create_net(self.model_cfg, self.logger)
-		net, min_net = train.train(net)
+		net, best_net, traindata, analysis = train.train(net)
 		save_net(net, self.location)
 		if self.evaluation_interval:
-			save_net(min_net, self.location, True)
+			save_net(best_net, self.location, is_best=True)
 
 		train.plot_training(self.location, name=self.name)
 		analysispath = os.path.join(self.location, "analysis")
@@ -137,18 +137,16 @@ class TrainJob:
 		os.mkdir(datapath)
 		os.mkdir(analysispath)
 
-		if self.analysis:
-			train.analysis.plot_substate_distributions(analysispath)
-			train.analysis.plot_value_targets(analysispath)
-			train.analysis.plot_net_changes(analysispath)
-			train.analysis.visualize_first_states(analysispath)
-			np.save(f"{datapath}/avg_target_values.npy", train.analysis.avg_value_targets)
-			np.save(f"{datapath}/policy_entropies.npy", train.analysis.policy_entropies)
-			np.save(f"{datapath}/substate_val_stds.npy", train.analysis.substate_val_stds)
+		if analysis is not None:
+			analysis.plot_substate_distributions(analysispath)
+			analysis.plot_value_targets(analysispath)
+			analysis.plot_net_changes(analysispath)
+			analysis.visualize_first_states(analysispath)
+			np.save(f"{datapath}/avg_target_values.npy", analysis.avg_value_targets)
+			np.save(f"{datapath}/policy_entropies.npy", analysis.policy_entropies)
+			np.save(f"{datapath}/substate_val_stds.npy", analysis.substate_val_stds)
 
 		np.save(f"{datapath}/rollouts.npy", train.train_rollouts)
-		np.save(f"{datapath}/policy_losses.npy", train.policy_losses)
-		np.save(f"{datapath}/value_losses.npy", train.value_losses)
 		np.save(f"{datapath}/losses.npy", train.train_losses)
 		np.save(f"{datapath}/evaluation_rollouts.npy", train.evaluation_rollouts)
 		np.save(f"{datapath}/evaluations.npy", train.sol_percents)

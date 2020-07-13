@@ -32,18 +32,51 @@ class TrainData:
 		raise NotImplementedError
 
 
-class FFBatches:
-	# TODO: Implement such that this can be used as a wrapper for feedforwarding, which automatically increases the number of batches
-	# That way, it can be used in other places
-	def __init__(self, initial_batches=1):
-		self.batches = initial_batches
-	def increase(self, factor=2):
-		self.batches *= factor
+class BatchFeedForward:
+	"""
+	This class handles feedforwarding large batches that would otherwise cause memory overflow
+	It works by splitting it into smaller batches, if it encounters a memory error
+	Only works when gradient should be tracked
+	"""
 
+	def __init__(self, net: Model, data_points: int, logger=NullLogger(), initial_batches=1, increase_factor=2):
+		self.net = net
+		self.data_points = data_points
+		self.log = logger
+		self.batches = initial_batches
+		self.increase_factor = increase_factor
+	
+	@no_grad
+	def forward(self, x: torch.tensor) -> torch.tensor:
+		while True:
+			try:
+				output_parts = [self.net(x[slice_]) for slice_ in self._get_slices()]
+				output = torch.cat(output_parts)
+				break
+			except RuntimeError as e:  # Usually caused by running out of vram. If not, the error is still raised, else batch size is reduced
+				if "alloc" not in str(e):
+					raise e
+				self.log.verbose(f"Intercepted RuntimeError {e}\nIncreasing number of ADI feed forward batches from "
+								 f"{self.batches} to {self.batches*self.increase_factor}")
+				self._increase()
+		return output
+	
+	def update_net(self, net: Model):
+		self.net = net
+	
+	def __call__(self, x: torch.tensor) -> torch.tensor:
+		return self.forward(x)
+
+	def _increase(self):
+		self.batches *= self.increase_factor
+
+	def _get_slices(self):
+		slice_size = self.data_points // self.batches + 1
+		# Final slice may have overflow, however this is simply ignored when indexing
+		slices = [slice(i*slice_size, (i+1)*slice_size) for i in range(self.batches)]
+		return slices
 
 class Train:
-
-	states_per_rollout: int
 
 	def __init__(self,
 				 env: envs.Environment,
@@ -62,7 +95,6 @@ class Train:
 				 with_analysis: bool,
 				 tau: float,
 				 reward_method: str,
-				 policy_criterion	= torch.nn.CrossEntropyLoss,
 				 value_criterion	= torch.nn.MSELoss,
 				 logger: Logger		= NullLogger(),
 			):
@@ -75,9 +107,8 @@ class Train:
 		"""
 		self.env = env
 
-		# TODO: Set self.states_per_rollout here
 		self.rollouts = rollouts
-		self.train_rollouts = np.arange(self.rollouts)
+		self.states_per_rollout = rollout_games * rollout_depth
 		self.batch_size = self.states_per_rollout if not batch_size else batch_size
 		self.rollout_games = rollout_games
 		self.rollout_depth = rollout_depth
@@ -93,7 +124,6 @@ class Train:
 		self.update_interval = update_interval  # How often alpha and lr are updated
 
 		self.optim = optim_fn
-		self.policy_criterion = policy_criterion(reduction='none')
 		self.value_criterion = value_criterion(reduction='none')
 
 		self.evaluator = evaluator
@@ -105,13 +135,13 @@ class Train:
 			f"Learning rate and gamma: {self.lr} and {self.gamma}",
 			f"Learning rate and alpha will update every {self.update_interval} rollouts: lr <- {self.gamma:.4f} * lr and alpha += {self.alpha_update:.4f}"\
 				if self.update_interval else "Learning rate and alpha will not be updated during training",
-			f"Optimizer:      {self.optim}",
-			f"Policy and value criteria: {self.policy_criterion} and {self.value_criterion}",
-			f"Rollouts:       {self.rollouts}",
-			f"Batch size:     {self.batch_size}",
-			f"Rollout games:  {self.rollout_games}",
-			f"Rollout depth:  {self.rollout_depth}",
-			f"alpha update:   {self.alpha_update}",
+			f"Optimizer:       {self.optim}",
+			f"Value criterion: {self.value_criterion}",
+			f"Rollouts:        {self.rollouts}",
+			f"Batch size:      {self.batch_size}",
+			f"Rollout games:   {self.rollout_games}",
+			f"Rollout depth:   {self.rollout_depth}",
+			f"alpha update:    {self.alpha_update}",
 		]))
 
 		self.with_analysis = with_analysis
@@ -151,31 +181,29 @@ class Train:
 									 self.rollout_depth,
 									 extra_evals=100,
 									 reward_method=self.reward_method,
-									 logger=self.log)  # Logger should not be set in standard use
+									 logger=self.log)
 			analysis.orig_params = net.get_params()
 		else:
 			analysis = None
 
 		generator_net = net.clone()
+		ff = BatchFeedForward(generator_net, self.rollout_games * self.rollout_depth * self.env.action_dim, self.log)
 
 		alpha = 1 if self.alpha_update == 1 else 0
 		optimizer = self.optim(net.parameters(), lr=self.lr)
 		lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, self.gamma)
-		self.policy_losses = np.zeros(self.rollouts)
-		self.value_losses = np.zeros(self.rollouts)
-		self.train_losses = np.empty(self.rollouts)
-		self.sol_percents = list()
 
 		for rollout in range(self.rollouts):
 			reset_cuda()
 
 			generator_net = self._update_gen_net(generator_net, net) if self.tau != 1 else net
+			generator_net.eval()
+			ff.update_net(generator_net)
 
 			self.tt.profile("ADI training data")
-			training_data, policy_targets, value_targets, loss_weights = self.ADI_traindata(generator_net, alpha)
+			training_data, value_targets, loss_weights = ADI_traindata(self, ff, alpha)
 			self.tt.profile("To cuda")
 			training_data = training_data.to(gpu)
-			policy_targets = policy_targets.to(gpu)
 			value_targets = value_targets.to(gpu)
 			loss_weights = loss_weights.to(gpu)
 			self.tt.end_profile("To cuda")
@@ -186,7 +214,7 @@ class Train:
 			self.tt.profile("Training loop")
 			net.train()
 			batches = self._get_batches(self.states_per_rollout, self.batch_size)
-			for i, batch in enumerate(batches):
+			for batch in batches:
 				optimizer.zero_grad()
 				value_pred = net(training_data[batch])
 
@@ -255,107 +283,16 @@ class Train:
 		]))
 
 		traindata = TrainData(
-			states_per_rollout = self.states_per_rollout,
-			rollouts           = self.rollouts,
-			games_per_rollout  = self.rollout_games,
-			rollout_depth      = self.rollout_depth,
-			losses             = np.ndarray(losses),
-			evaluation_results = np.ndarray(evaluation_results),
+			states_per_rollout  = self.states_per_rollout,
+			rollouts            = self.rollouts,
+			games_per_rollout   = self.rollout_games,
+			rollout_depth       = self.rollout_depth,
+			losses              = losses,
+			evaluation_rollouts = evaluation_rollouts,
+			evaluation_results  = np.array(evaluation_results),
 		)
 
 		return net, best_net, traindata, analysis
-
-	def _get_adi_ff_slices(self):
-		data_points = self.rollout_games * self.rollout_depth * self.env.action_dim
-		slice_size = data_points // self.adi_ff_batches + 1
-		# Final slice may have overflow, however this is simply ignored when indexing
-		slices = [slice(i*slice_size, (i+1)*slice_size) for i in range(self.adi_ff_batches)]
-		return slices
-
-	@no_grad
-	def ADI_traindata(self, net, alpha: float):
-		""" Training data generation
-
-		Implements Autodidactic Iteration as per McAleer, Agostinelli, Shmakov and Baldi, "Solving the Rubik's Cube Without Human Knowledge" section 4.1
-		Loss weighting is dependant on `self.loss_weighting`.
-
-		:param torch.nn.Model net: The network used for generating the training data. This should according to ADI be the network from the last rollout.
-		:param int rollout:  The current rollout number. Used in adaptive loss weighting.
-
-		:return:  Games * sequence_length number of observations divided in four arrays
-			- states contains the rubiks state for each data point
-			- policy_targets and value_targets contains optimal value and policy targets for each training point
-			- loss_weights contains the weight for each training point (see weighted samples subsection of McAleer et al paper)
-
-		:rtype: (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor)
-
-		"""
-		net.eval()
-		self.tt.profile("Scrambling")
-		# Only include solved state in training if using Max Lapan convergence fix
-		states, oh_states = self.env.sequence_scrambler(self.rollout_games, self.rollout_depth, with_solved = self.reward_method == 'lapanfix')
-		self.tt.end_profile("Scrambling")
-
-		# Keeps track of solved states - Max Lapan's convergence fix
-		solved_scrambled_states = self.envmulti_is_solved(states)
-
-		# Generates possible substates for all scrambled states. Shape: n_states*action_dim x *Cube_shape
-		self.tt.profile("ADI substates")
-		substates = self.envmulti_rotate(np.repeat(states, self.envaction_dim, axis=0), *self.enviter_actions(len(states)))
-		self.tt.end_profile("ADI substates")
-		self.tt.profile("One-hot encoding")
-		substates_oh = self.envas_oh(substates)
-		self.tt.end_profile("One-hot encoding")
-
-		self.tt.profile("Reward")
-		solved_substates = self.envmulti_is_solved(substates)
-		# Reward for won state is 1 normally but 0 if running with reward0
-		rewards = (torch.zeros if self.reward_method == 'reward0' else torch.ones)\
-			(*solved_substates.shape)
-		rewards[~solved_substates] = -1
-		self.tt.end_profile("Reward")
-
-		# Generates policy and value targets
-		self.tt.profile("ADI feedforward")
-		while True:
-			try:
-				value_parts = [net(substates_oh[slice_], policy=False, value=True).squeeze() for slice_ in self._get_adi_ff_slices()]
-				values = torch.cat(value_parts).cpu()
-				break
-			except RuntimeError as e:  # Usually caused by running out of vram. If not, the error is still raised, else batch size is reduced
-				if "alloc" not in str(e):
-					raise e
-				self.log.verbose(f"Intercepted RuntimeError {e}\nIncreasing number of ADI feed forward batches from {self.adi_ff_batches} to {self.adi_ff_batches*2}")
-				self.adi_ff_batches *= 2
-		self.tt.end_profile("ADI feedforward")
-
-		self.tt.profile("Calculating targets")
-		values += rewards
-		values = values.reshape(-1, 12)
-		policy_targets = torch.argmax(values, dim=1)
-		value_targets = values[np.arange(len(values)), policy_targets]
-		if self.reward_method == 'lapanfix':
-			# Trains on goal state, sets goalstate to 0
-			value_targets[solved_scrambled_states] = 0
-		elif self.reward_method == 'schultzfix':
-			# Does not train on goal state, but sets first 12 substates to 0
-			first_substates = np.zeros(len(states), dtype=bool)
-			first_substates[np.arange(0, len(states), self.rollout_depth)] = True
-			value_targets[first_substates] = 0
-
-		self.tt.end_profile("Calculating targets")
-
-		# Weighting examples according to alpha
-		weighted = np.tile(1 / np.arange(1, self.rollout_depth+1), self.rollout_games)
-		unweighted = np.ones_like(weighted)
-		ws, us = weighted.sum(), len(unweighted)
-		loss_weights = ((1-alpha) * weighted / ws + alpha * unweighted / us) * (ws + us)
-
-		if self.with_analysis:
-			self.tt.profile("ADI analysis")
-			self.analysis.ADI(values)
-			self.tt.end_profile("ADI analysis")
-		return oh_states, policy_targets, value_targets, torch.from_numpy(loss_weights).float()
 
 	def _update_gen_net(self, generator_net: Model, net: Model):
 		"""Create a network with parameters weighted by self.tau"""
@@ -443,3 +380,82 @@ class Train:
 			evaluation_rollouts = np.array([])
 		
 		return evaluation_rollouts
+
+
+@no_grad
+def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float) -> (torch.tensor, torch.tensor, torch.tensor):
+	""" Training data generation
+
+	Implements Autodidactic Iteration as per McAleer, Agostinelli, Shmakov and Baldi, "Solving the Rubik's Cube Without Human Knowledge" section 4.1
+	Loss weighting is dependant on `self.loss_weighting`.
+
+	:param torch.nn.Model net: The network used for generating the training data. This should according to ADI be the network from the last rollout.
+	:param int rollout:  The current rollout number. Used in adaptive loss weighting.
+
+	:return:  Games * sequence_length number of observations divided in four arrays
+		- states contains the rubiks state for each data point
+		- policy_targets and value_targets contains optimal value and policy targets for each training point
+		- loss_weights contains the weight for each training point (see weighted samples subsection of McAleer et al paper)
+
+	:rtype: (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor)
+	"""
+
+	train.tt.profile("Scrambling")
+	# Only include solved state in training if using Max Lapan convergence fix
+	states, oh_states = train.env.sequence_scrambler(
+		train.rollout_games,
+		train.rollout_depth,
+		with_solved = train.reward_method == 'lapanfix'
+	)
+	train.tt.end_profile()
+
+	# Keeps track of solved states - Max Lapan's convergence fix
+	solved_scrambled_states = train.env.multi_is_solved(states)
+
+	# Generates possible substates for all scrambled states. Shape: n_states*action_dim x *Cube_shape
+	train.tt.profile("ADI substates")
+	substates = train.env.multi_rotate(np.repeat(states, train.env.action_dim, axis=0), train.env.iter_actions(len(states)))
+	train.tt.end_profile()
+	train.tt.profile("One-hot encoding")
+	substates_oh = train.envas_oh(substates)
+	train.tt.end_profile()
+
+	train.tt.profile("Reward")
+	solved_substates = train.env.multi_is_solved(substates)
+	# Reward for won state is 1 normally but 0 if running with reward0
+	rewards = (torch.zeros if train.reward_method == 'reward0' else torch.ones)\
+		(*solved_substates.shape)
+	rewards[~solved_substates] = -1
+	train.tt.end_profile()
+
+	# Generates policy and value targets
+	train.tt.profile("ADI feedforward")
+	values = ff(substates_oh).cpu()
+	train.tt.end_profile()
+
+	train.tt.profile("Calculating targets")
+	values += rewards
+	values = values.reshape(-1, 12)
+	value_targets = values[np.arange(len(values)), torch.argmax(values, dim=1)]
+	if train.reward_method == 'lapanfix':
+		# Trains on goal state, sets goalstate to 0
+		value_targets[solved_scrambled_states] = 0
+	elif train.reward_method == 'schultzfix':
+		# Does not train on goal state, but sets first 12 substates to 0
+		first_substates = np.zeros(len(states), dtype=bool)
+		first_substates[np.arange(0, len(states), train.rollout_depth)] = True
+		value_targets[first_substates] = 0
+	train.tt.end_profile()
+
+	# Weighting examples according to alpha
+	weighted = np.tile(1 / np.arange(1, train.rollout_depth+1), train.rollout_games)
+	unweighted = np.ones_like(weighted)
+	ws, us = weighted.sum(), len(unweighted)
+	loss_weights = ((1-alpha) * weighted / ws + alpha * unweighted / us) * (ws + us)
+
+	if train.with_analysis:
+		train.tt.profile("ADI analysis")
+		train.analysis.ADI(values)
+		train.tt.end_profile()
+	return oh_states, value_targets, torch.from_numpy(loss_weights).float()
+

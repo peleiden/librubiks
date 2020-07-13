@@ -66,6 +66,7 @@ class TickTock:
 		return end - self._start
 
 	def profile(self, name: str):
+		# TODO: Instead of this mess, use a stack to keep track of which profile to end
 		if name not in self.profiles:
 			self.profiles[name] = Profile(name, self._profile_depth)
 		self._profile_depth += 1
