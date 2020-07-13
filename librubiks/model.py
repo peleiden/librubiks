@@ -93,7 +93,6 @@ class Model(nn.Module, ABC):
 	def _create_fc_layers(self, thiccness: list):
 		"""
 		Helper function to return fully connected feed forward layers given a list of layer sizes and a final output size.
-		TODO: Dropout, and only do it if config.dropout != 0 so it will not waste time if not given
 		"""
 		layers = []
 		for i in range(len(thiccness)-1):
@@ -110,6 +109,8 @@ class Model(nn.Module, ABC):
 				layers.append(self.config.get_af())
 				if self.config.batchnorm:
 					layers.append(nn.BatchNorm1d(thiccness[i+1]))
+				if self.config.dropout > 0:
+					layers.append(nn.Dropout(p=self.config.dropout))
 
 		return layers
 
