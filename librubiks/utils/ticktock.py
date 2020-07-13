@@ -54,8 +54,7 @@ class TickTock:
 
 	_start = 0
 	profiles: Dict[str, Profile] = {}
-	_profile_depth = 0
-	_latest_profile: str
+	_profile_stack: List[Profile] = list()
 
 	def tick(self):
 		self._start = perf_counter()
@@ -66,30 +65,27 @@ class TickTock:
 		return end - self._start
 
 	def profile(self, name: str):
-		# TODO: Instead of this mess, use a stack to keep track of which profile to end
 		if name not in self.profiles:
-			self.profiles[name] = Profile(name, self._profile_depth)
-		self._profile_depth += 1
-		self._latest_profile = name
+			self.profiles[name] = Profile(name, len(self._profile_stack))
+		self._profile_stack.append(self.profiles[name])
 		self.profiles[name].start = perf_counter()
 
 	def end_profile(self, name: str=None):
 		end = perf_counter()
-		name = name or self._latest_profile
-		dt = end - self.profiles[name].start
-		self.profiles[name].hits.append(dt)
-		self._profile_depth -= 1
+		dt = end - self._profile_stack[-1].start
+		self._profile_stack[-1].hits.append(dt)
+		profile = self._profile_stack.pop()
+		if name is not None:
+			assert name == profile.name, f"Expected to pop profile '{profile.name}', received '{name}'"
 		return dt
-
-	def rename_section(self, name: str, new_name: str):
-		# Renames a section
-		# If a section with new_name already exists, they are combined under new_name
-		# TODO: Drop this method and make a fuse function instead
-		if self.profiles[new_name]:
-			self.profiles[new_name].hits += self.profiles[name].hits
-		else:
-			self.profiles[new_name] = self.profiles[name]
-		del self.profiles[name]
+	
+	def fuse(self, tt):
+		"""Fuses a TickTock instance into self"""
+		for profile in tt.profiles.values():
+			if profile.name in self.profiles.keys():
+				self.profiles[profile.name].hits += profile.hits
+			else:
+				self.profiles[profile.name] = profile
 
 	def remove_outliers(self, threshold=2):
 		# For all profiles, remove hits longer than threshold * average hit

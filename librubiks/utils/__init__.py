@@ -34,7 +34,7 @@ def get_commit():
 	if has_git:
 		repo = git.Repo(".")  # TODO: Search upwards in directories
 		return str(repo.head.commit)
-	return "Unknown (install GitPython to get the commit logged)"
+	return "Unknown (install GitPython to get the commit)"
 
 
 def get_timestamp(for_file=False):
