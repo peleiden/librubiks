@@ -44,7 +44,7 @@ class TrainJob:
 				 analysis: bool,
 
 				 # Not set by argparser/configparser
-				 # TODO: If agent becomes good enough, maybe evaluate on several different depths
+				 # TODO: Evaluate on several different depths
 				 agent = ValueSearch(net=None),
 				 scrambling_depths: tuple = (12,),
 			):
@@ -154,30 +154,30 @@ class TrainJob:
 
 class EvalJob:
 
-	def __init__(self,
-				 name: str,
-				 # Set by parser, should correspond to options in runeval
-				 location: str,
-				 use_best: bool,
-				 agent: str,
-				 games: int,
-				 max_time: float,
-				 max_states: int,
-				 scrambling: str,
-				 optimized_params: bool,
-				 mcts_c: float,
-				 mcts_graph_search: bool,
-				 policy_sample: bool,
-				 astar_lambda: float,
-				 astar_expansions: int,
-				 egvm_epsilon: float,
-				 egvm_workers: int,
-				 egvm_depth: int,
+	def __init__(
+			self,
+			name: str,
+			# Set by parser, should correspond to options in runeval
+			location: str,
+			use_best: bool,
+			agent: str,
+			games: int,
+			max_time: float,
+			max_states: int,
+			scrambling: str,
+			optimized_params: bool,
+			mcts_c: float,
+			mcts_graph_search: bool,
+			policy_sample: bool,
+			astar_lambda: float,
+			astar_expansions: int,
+			egvm_epsilon: float,
+			egvm_workers: int,
+			egvm_depth: int,
 
-				 # Currently not set by parser
-				 verbose: bool = True,
-				 in_subfolder: bool = False,  # Should be true if there are multiple experiments
-			 ):
+			# Currently not set by parser
+			in_subfolder: bool,  # Should be true if there are multiple experiments
+		):
 
 		self.name = name
 		self.location = location
@@ -189,11 +189,11 @@ class EvalJob:
 		scrambling = range(*scrambling)
 		assert isinstance(optimized_params, bool)
 
-		#Create evaluator
-		self.logger = Logger(f"{self.location}/{self.name}.log", name, verbose)  # Already creates logger at init to test whether path works
+		# Create evaluator
+		self.logger = Logger(f"{self.location}/{self.name}.log", name)  # Already creates logger at init to test whether path works
 		self.evaluator = Evaluator(n_games=games, max_time=max_time, max_states=max_states, scrambling_depths=scrambling, logger=self.logger)
 
-		#Create agents
+		# Create agents
 		agent_string = agent
 		agent = getattr(agents, agent_string)
 		assert issubclass(agent, agents.Agent)
@@ -201,7 +201,7 @@ class EvalJob:
 		if issubclass(agent, agents.DeepAgent):
 			self.agents, self.reps, agents_args = {}, {}, {}
 
-			#DeepAgents need specific arguments
+			# DeepAgents need specific arguments
 			if agent == agents.AStar:
 				assert isinstance(astar_lambda, float) and 0 <= astar_lambda <= 1, "AStar lambda must be float in [0, 1]"
 				assert isinstance(astar_expansions, int) and astar_expansions >= 1 and (not max_states or astar_expansions < max_states) , "Expansions must be int < max states"
@@ -213,7 +213,6 @@ class EvalJob:
 			# DeepAgent might have to test multiple NN's
 			for folder in glob(f"{search_location}/*/") + [search_location]:
 				if not os.path.isfile(os.path.join(folder, 'model.pt')): continue
-				store_repr()
 				with open(f"{folder}/config.json") as f:
 					cfg = json.load(f)
 				if optimized_params and agent in [agents.AStar]:
@@ -224,13 +223,11 @@ class EvalJob:
 					else:
 						self.logger.log(f"Optimized params was set to true, but no file {parampath} was found, proceding with arguments for this {agent_string}.")
 
-				set_is2024(cfg["is2024"])
 				agent = agent.from_saved(folder, use_best=use_best, **agents_args)
 				key = f'{agent}{"" if folder == search_location else " " + os.path.basename(folder.rstrip(os.sep))}'
 
 				self.reps[key] = cfg["is2024"]
 				self.agents[key] = agent
-				restore_repr()
 
 			if not self.agents:
 				raise FileNotFoundError(f"No model.pt found in folder or subfolder of {self.location}")
@@ -239,7 +236,7 @@ class EvalJob:
 		else:
 			agent = agent()
 			self.agents = { str(agent): agent }
-			self.reps   = { str(agent): True }
+			self.reps   = { str(agent): True  }
 
 		self.agent_results = {}
 		self.logger.log(f"Initialized {self.name} with agents {', '.join(str(s) for s in self.agents)}")
@@ -248,23 +245,14 @@ class EvalJob:
 	def execute(self):
 		self.logger.log(f"Beginning evaluator {self.name}\nLocation {self.location}\nCommit: {get_commit()}")
 		for (name, agent), representation in zip(self.agents.items(), self.reps.values()):
-			self.is2024 = representation
 			self.agent_results[name] = self._single_exec(name, agent)
 
-	@with_used_repr
 	def _single_exec(self, name: str, agent: Agent):
 		self.logger.section(f'Evaluationg agent {name}')
-		res, states, times = self.evaluator.eval(agent)
+		evaldata = self.evaluator.eval(agent)
 		subfolder = os.path.join(self.location, "evaluation_results")
 		os.makedirs(subfolder, exist_ok=True)
-		paths = [
-			os.path.join(subfolder, f"{name}_results.npy"),
-			os.path.join(subfolder, f"{name}_states_seen.npy"),
-			os.path.join(subfolder, f"{name}_playtimes.npy")
-		]
-		np.save(paths[0], res)
-		np.save(paths[1], states)
-		np.save(paths[2], times)
+		paths = evaldata.save(subfolder)
 		self.logger.log("Saved evaluation results to\n" + "\n".join(paths))
 		return res, states, times
 

@@ -45,10 +45,13 @@ class DataStorage:
 				to_json.update({key: data})
 		
 		# Save data
-		with open(os.path.join(loc, self.json_name), "w", encoding="utf-8") as f:
+		paths = [os.path.join(loc, self.json_name)]
+		with open(paths[0], "w", encoding="utf-8") as f:
 			json.dump(to_json, f)
 		for key, arr in to_npy.items():
-			np.save(os.path.join(loc, f"{key}.npy"), arr)
+			paths.append(os.path.join(loc, f"{key}.npy"))
+			np.save(paths[-1], arr)
+		return paths
 	
 	@classmethod
 	def load(cls, loc: str):

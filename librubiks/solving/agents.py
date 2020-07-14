@@ -5,9 +5,9 @@ import heapq
 import numpy as np
 import torch
 
-from librubiks.utils import TickTock
 
-from librubiks import gpu, no_grad
+from librubiks import gpu, no_grad, envs
+from librubiks.utils import TickTock
 from librubiks.model import Model, load_net
 
 
@@ -15,7 +15,8 @@ class Agent(ABC):
 	eps = np.finfo("float").eps
 	_explored_states = 0
 
-	def __init__(self):
+	def __init__(self, env: envs.Environment):
+		self.env = env
 		self.action_queue = deque()
 		self.tt = TickTock()
 
@@ -26,7 +27,7 @@ class Agent(ABC):
 		time_limit, max_states = self.reset(time_limit, max_states)
 		self.tt.tick()
 
-		if cube.is_solved(state): return True
+		if self.env.is_solved(state): return True
 		while self.tt.tock() < time_limit and len(self) < max_states:
 			action, state, solution_found = self._step(state)
 			self.action_queue.append(action)
@@ -39,7 +40,7 @@ class Agent(ABC):
 
 	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
 		"""
-		Takes a step given a stae
+		Takes a step given a state
 		:param state: numpy array containing a state
 		:return: Action index, new state, is solved
 		"""
@@ -49,7 +50,8 @@ class Agent(ABC):
 		self._explored_states = 0
 		self.action_queue = deque()
 		self.tt.reset()
-		if hasattr(self, "net"): self.net.eval()
+		if hasattr(self, "net"):
+			getattr(self, "net").eval()
 		assert time_limit or max_states
 		time_limit = time_limit or 1e10
 		max_states = max_states or int(1e10)
@@ -65,8 +67,9 @@ class Agent(ABC):
 
 class DeepAgent(Agent, ABC):
 	def __init__(self, net: Model):
-		super().__init__()
+		super().__init__(None)
 		self.net = net
+		self.env = net.env
 
 	@classmethod
 	def from_saved(cls, loc: str, use_best: bool):
@@ -80,9 +83,9 @@ class DeepAgent(Agent, ABC):
 
 class RandomSearch(Agent):
 	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
-		action = np.random.randint(cube.action_dim)
-		state = cube.rotate(state, *cube.action_space[action])
-		return action, state, cube.is_solved(state)
+		action = np.random.randint(self.env.action_dim)
+		state = self.env.rotate(state, self.env.action_space[action])
+		return action, state, self.env.is_solved(state)
 
 	def __str__(self):
 		return "Random depth-first search"
@@ -97,7 +100,7 @@ class BFS(Agent):
 		time_limit, max_states = self.reset(time_limit, max_states)
 		self.tt.tick()
 
-		if cube.is_solved(state): return True
+		if self.env.is_solved(state): return True
 
 		# Each element contains the state from which it came and the action taken to get to it
 		self.states = { state.tostring(): (None, None) }
@@ -105,12 +108,12 @@ class BFS(Agent):
 		while self.tt.tock() < time_limit and len(self) < max_states:
 			state = queue.popleft()
 			tstate = state.tostring()
-			for i, action in enumerate(cube.action_space):
-				new_state = cube.rotate(state, *action)
+			for i, action in enumerate(self.env.action_space):
+				new_state = self.env.rotate(state, *action)
 				new_tstate = new_state.tostring()
 				if new_tstate in self.states:
 					continue
-				elif cube.is_solved(new_state):
+				elif self.env.is_solved(new_state):
 					self.action_queue.appendleft(i)
 					while self.states[tstate][0] is not None:
 						self.action_queue.appendleft(self.states[tstate][1])
@@ -132,13 +135,13 @@ class BFS(Agent):
 class ValueSearch(DeepAgent):
 
 	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
-		substates = cube.multi_rotate(cube.repeat_state(state, cube.action_dim), *cube.iter_actions())
-		solutions = cube.multi_is_solved(substates)
+		substates = self.env.multi_rotate(self.env.repeat_state(state, self.env.action_dim), self.env.iter_actions())
+		solutions = self.env.multi_is_solved(substates)
 		if np.any(solutions):
 			action = np.where(solutions)[0][0]
 			return action, substates[action], True
 		else:
-			substates_oh = cube.as_oh(substates)
+			substates_oh = self.env.as_oh(substates)
 			v = self.net(substates_oh, policy=False).squeeze().cpu().numpy()
 			action = np.argmax(v)
 			return action, substates[action], False
@@ -148,34 +151,34 @@ class ValueSearch(DeepAgent):
 
 
 class AStar(DeepAgent):
-	"""Batch Weighted A* Search
+	"""
+	Batch Weighted A* Search
 	As per Agostinelli, McAleer, Shmakov, Baldi:
 	"Solving the Rubik's cube with deep reinforcement learning and search".
 
 	Expands the `self.expansions` best nodes at a time according to cost
 	f(node) = `self.lambda_` * g(node) + h(node)
 	where h(node) is given as the negative value (cost-to-go) of the DNN and g(x) is the path cost
-
 	"""
 	# Expansion priority queue
-		# Min heap. An element contains tuple of (cost, index)
-		# This priority queue uses python std. lib heapq which is based on the python list.
-		# We should maybe consider whether this could be done faster if we build our own implementation.
+	# 	Min heap. An element contains tuple of (cost, index)
+	# 	This priority queue uses python std. lib heapq which is based on the python list.
+	# 	We should maybe consider whether this could be done faster if we build our own implementation.
 	open_queue: list
 
 	# State data structures
 	# The length of all arrays are dynamic and controlled by `reset` and `expand_stack_size`
 	# Index 0 is not used in these to allow for
-		# states
-			# Contains all states currently visited in the representation set in cube
-		# indices:
-			# Dictionary mapping state.tostring() to index in the states array.
-		# G_
-			# A* distance approximation of distance to starting node
-		# parents
-			#parents[i] is index of currently found parent with lowest G of state i
-		# parent_actions
-			#parent_actions[i] is action idx taken FROM the lightest parent to state i
+	# 	states
+	# 		Contains all states currently visited in the representation set in cube
+	# 	indices:
+	# 		Dictionary mapping state.tostring() to index in the states array.
+	# 	G_
+	# 		A* distance approximation of distance to starting node
+	# 	parents
+	# 		parents[i] is index of currently found parent with lowest G of state i
+	# 	parent_actions
+	# 		parent_actions[i] is action idx taken FROM the lightest parent to state i
 
 	indices = dict
 	states: np.ndarray
@@ -206,13 +209,13 @@ class AStar(DeepAgent):
 		"""
 		self.tt.tick()
 		time_limit, max_states = self.reset(time_limit, max_states)
-		if cube.is_solved(state): return True
+		if self.env.is_solved(state): return True
 
 			#First node
 		self.indices[state.tostring()], self.states[1], self.G[1] = 1, state, 0
 		heapq.heappush( self.open_queue, (0, 1) ) #Given cost 0: Should not matter; just to avoid np.empty weirdness
 
-		while self.tt.tock() < time_limit and len(self) + self.expansions * cube.action_dim <= max_states:
+		while self.tt.tock() < time_limit and len(self) + self.expansions * self.env.action_dim <= max_states:
 			self.tt.profile("Remove nodes from open priority queue")
 			n_remove = min( len(self.open_queue), self.expansions )
 			expand_idcs = np.array([ heapq.heappop(self.open_queue)[1] for _ in range(n_remove) ], dtype=int)
@@ -220,7 +223,7 @@ class AStar(DeepAgent):
 
 			is_won = self.expand_batch(expand_idcs)
 			if is_won: #🦀🦀🦀WE DID IT BOIS🦀🦀🦀
-				i = self.indices[ cube.get_solved().tostring() ]
+				i = self.indices[ self.env.get_solved().tostring() ]
 					#Build action queue
 				while i != 1:
 					self.action_queue.appendleft(
@@ -249,16 +252,16 @@ class AStar(DeepAgent):
 		:return: True iff. solution was found in this expansion
 		"""
 		expand_size = len(expand_idcs)
-		while len(self) + expand_size * cube.action_dim > len(self.states):
+		while len(self) + expand_size * self.env.action_dim > len(self.states):
 			self.increase_stack_size()
 
 		self.tt.profile("Calculate substates")
-		parent_idcs = np.repeat(expand_idcs, cube.action_dim, axis=0)
-		substates = cube.multi_rotate(
+		parent_idcs = np.repeat(expand_idcs, self.env.action_dim, axis=0)
+		substates = self.env.multi_rotate(
 			self.states[parent_idcs],
-			*cube.iter_actions(expand_size)
+			self.env.iter_actions(expand_size)
 		)
-		actions_taken = np.tile(np.arange(cube.action_dim), expand_size)
+		actions_taken = np.tile(np.arange(self.env.action_dim), expand_size)
 		self.tt.end_profile("Calculate substates")
 
 		self.tt.profile("Find new substates")
@@ -297,7 +300,7 @@ class AStar(DeepAgent):
 		self.tt.end_profile("Update new state values")
 
 		self.tt.profile("Check whether won")
-		solved_substates = cube.multi_is_solved(new_states)
+		solved_substates = self.env.multi_is_solved(new_states)
 		if solved_substates.any():
 			return True
 		self.tt.end_profile("Check whether won")
@@ -342,7 +345,7 @@ class AStar(DeepAgent):
 		shortcut_states, shortcut_parents = state_idcs[shortcuts], parent_idcs[shortcuts]
 
 		self.G[shortcut_parents] = self.G[shortcut_states] + 1
-		self.parent_actions[shortcut_parents] = cube.rev_actions(actions_taken[shortcuts])
+		self.parent_actions[shortcut_parents] = self.env.rev_actions(actions_taken[shortcuts])
 		self.parents[shortcut_parents] = shortcut_states
 
 	@no_grad
@@ -355,30 +358,30 @@ class AStar(DeepAgent):
 		:param states: (batch size, *(cube_dimensions)) of states
 		:param indeces: indeces in self.indeces corresponding to these states.
 		"""
-		states = cube.as_oh(states)
-		H = -self.net(states, value=True, policy=False)
+		states = self.env.as_oh(states)
+		H = -self.net(states)
 		H = H.cpu().squeeze().detach().numpy()
 
 		return self.lambda_ * self.G[indeces] + H
 
 	def reset(self, time_limit: float, max_states: int) -> (float, int):
 		time_limit, max_states = super().reset(time_limit, max_states)
-		self.open_queue = list()
-		self.indices   = dict()
 
-		self.states    = np.empty((self._stack_expand, *cube.shape()), dtype=cube.dtype)
-		self.parents = np.empty(self._stack_expand, dtype=int)
+		self.open_queue     = list()
+		self.indices        = dict()
+		self.states         = np.empty((self._stack_expand, *self.env.shape()), dtype=self.env.dtype)
+		self.parents        = np.empty(self._stack_expand, dtype=int)
 		self.parent_actions = np.zeros(self._stack_expand, dtype=int)
-		self.G         = np.empty(self._stack_expand)
+		self.G              = np.empty(self._stack_expand)
 		return time_limit, max_states
 
 	def increase_stack_size(self):
 		expand_size    = len(self.states)
 
-		self.states	   = np.concatenate([self.states, np.empty((expand_size, *cube.shape()), dtype=cube.dtype)])
-		self.parents   = np.concatenate([self.parents, np.zeros(expand_size, dtype=int)])
-		self.parent_actions   = np.concatenate([self.parent_actions, np.zeros(expand_size, dtype=int)])
-		self.G         = np.concatenate([self.G, np.empty(expand_size)])
+		self.states	        = np.concatenate([self.states, np.empty((expand_size, *self.env.shape()), dtype=self.env.dtype)])
+		self.parents        = np.concatenate([self.parents, np.zeros(expand_size, dtype=int)])
+		self.parent_actions = np.concatenate([self.parent_actions, np.zeros(expand_size, dtype=int)])
+		self.G              = np.concatenate([self.G, np.empty(expand_size)])
 
 	@classmethod
 	def from_saved(cls, loc: str, use_best: bool, lambda_: float, expansions: int) -> DeepAgent:

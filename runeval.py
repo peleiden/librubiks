@@ -16,11 +16,10 @@ options = {
 		'help':     "Location to search for model and save results.\nMust use location/<run_name>/model.pt structure.",
 		'type':     str,
 	},
-	'agent': {
+	'agents': {
 		'default':  'AStar',
-		'help':     'Type of solver agent corresponding to agent class in librubiks.solving.agents',
-		'type':     str,
-		'choices':  ['AStar', 'MCTS', 'PolicySearch', 'ValueSearch', 'EGVM', 'BFS', 'RandomDFS', ],
+		'help':     'One or more space seperated agents corresponding to agent classes in librubiks.solving.agents',
+		'type':     lambda arg: arg.split(),
 	},
 	'scrambling': {
 		'default':  100,
@@ -66,38 +65,6 @@ options = {
 		'help':     'The A* expansions parameter: How many nodes to expand to at a time. Can be thought of as a batch size: Higher is much faster but lower should be a bit more precise.',
 		'type':     int,
 	},
-	'mcts_c': {
-		'default':  0.6,
-		'help':     'Exploration parameter c for MCTS',
-		'type':     float,
-	},
-	'mcts_graph_search': {
-		'default':  True,
-		'help':     'Whether or not graph search should be applied to MCTS to find the shortest path',
-		'type':     literal_eval,
-		'choices':  [True, False],
-	},
-	'policy_sample': {
-		'default':  False,
-		'help':     'Whether or not there should be sampled when using the PolicySearch agent',
-		'type':     literal_eval,
-		'choices':  [True, False],
-	},
-	'egvm_epsilon': {
-		'default':  0.01,
-		'help':     'Epsilon for epsilon greedy policy search in Epsilon Greedy Value Maximization',
-		'type':     float,
-	},
-	'egvm_workers': {
-		'default':  10,
-		'help':     'Number of sequential workers in Epsilon Greedy Value Maximization',
-		'type':     int,
-	},
-	'egvm_depth': {
-		'default':  100,
-		'help':     'Exploration depth for each iteration of Epsilon Greedy Value Maximization',
-		'type':     int,
-	},
 }
 
 if __name__ == "__main__":
@@ -125,5 +92,4 @@ each of them.
 
 	for job in jobs:
 		job.execute()
-	EvalJob.plot_all_jobs(jobs, parser.save_location)
 

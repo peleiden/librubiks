@@ -1,27 +1,35 @@
 import os
+from dataclasses import dataclass
 
 import numpy as np
 from scipy import stats
 import matplotlib.colors as mcolour
 import matplotlib.pyplot as plt
 
-from librubiks import cube, rc_params, rc_params_small
+from librubiks import envs, rc_params, rc_params_small, DataStorage
 from librubiks.utils import NullLogger, Logger, TickTock, TimeUnit, bernoulli_error
 from librubiks.solving import agents
 
 
-class EvaluationData:
-	# TODO Similar to TrainData
-	raise NotImplementedError
+@dataclass
+class EvalData(DataStorage):
+	games: int
+	scrambling_depths: list
+	max_time: float
+	max_states: int
+	sol_lengths: np.ndarray
+	times: np.ndarray
+	states: np.ndarray
 
 
 class Evaluator:
-	def __init__(self,
-		         n_games,
-		         scrambling_depths: range or list,
-		         max_time = None,  # Max time to completion per game
-		         max_states = None,  # The max number of states to explore per game
-		         logger: Logger = NullLogger()
+	def __init__(
+			self,
+			n_games: int,
+			scrambling_depths: range or list,
+			max_time: float = None,  # Max time to completion per game
+			max_states: int = None,  # The max number of states to explore per game
+			logger: Logger = NullLogger(),
 		):
 
 		self.n_games = n_games
@@ -47,18 +55,19 @@ class Evaluator:
 
 	def _eval_game(self, agent: agents.Agent, depth: int, profile: str):
 		turns_to_complete = -1  # -1 for unfinished
-		state, _, _ = cube.scramble(depth, True)
+		state, _, _ = agent.env.scramble(depth, True)
 		self.tt.profile(profile)
 		solution_found = agent.search(state, self.max_time, self.max_states)
 		dt = self.tt.end_profile(profile)
-		if solution_found: turns_to_complete = len(agent.action_queue)
+		if solution_found:
+			turns_to_complete = len(agent.action_queue)
 		return turns_to_complete, dt
 
-	def eval(self, agent: agents.Agent) -> (np.ndarray, np.ndarray, np.ndarray):
+	def eval(self, agent: agents.Agent) -> EvalData:
 		"""
 		Evaluates an agent
 		Returns results which is an a len(self.scrambling_depths) x self.n_games matrix
-		Each entry contains the number of steps needed to solve the scrambled cube or -1 if not solved
+		Each entry contains the number of steps needed to solve the scrambled state or -1 if not solved
 		"""
 		self.log.section(f"Evaluation of {agent}")
 		self.log("\n".join([
@@ -94,7 +103,17 @@ class Evaluator:
 
 		self.log.verbose(f"Evaluation runtime\n{self.tt}")
 
-		return res, states, times
+		data = EvalData(
+			games = self.n_games,
+			scrambling_depths = self.scrambling_depths.tolist(),
+			max_time = self.max_time,
+			max_states = self.max_states,
+			sol_lengths = res,
+			times = times,
+			states = states,
+		)
+
+		return data
 
 	def log_this_depth(self, res: np.ndarray, states: np.ndarray, times: np.ndarray, depth: int):
 		"""Logs summary statistics for given depth
