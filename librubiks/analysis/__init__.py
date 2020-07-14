@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -6,13 +7,20 @@ from scipy.stats import entropy
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolour
 
-from librubiks import cube
+from librubiks import envs, DataStorage
 from librubiks.model import Model
 from librubiks.utils import NullLogger, Logger
+
+
+@dataclass
+class AnalysisData(DataStorage):
+	avg_value_targets: np.ndarray
+	substate_val_stds: np.ndarray
 
 class TrainAnalysis:
 	"""Performs analysis of the training procedure to understand loss and training behaviour"""
 	def __init__(self,
+				 env: envs.Environment,
 				 evaluations: np.ndarray,
 				 games: int,
 				 depth: int,
@@ -24,9 +32,9 @@ class TrainAnalysis:
 		:param np.ndarray evaluations:  array of the evaluations performed on the model. Used for the more intensive analysis
 		:param int depth: Rollout depth
 		:param extra_evals: If != 0, extra evaluations are added for the first `exta_evals` rollouts
-
 		"""
 
+		self.env = env
 		self.games = games
 		self.depth = depth
 		self.depths = np.arange(depth)
@@ -38,20 +46,15 @@ class TrainAnalysis:
 		self.params = None
 
 		self.first_states = np.stack((
-				cube.get_solved(),
-				*cube.multi_rotate(cube.repeat_state(cube.get_solved(), cube.action_dim), *cube.iter_actions())
-				))
-		self.first_states = cube.as_oh( self.first_states )
+			self.env.get_solved(),
+			*self.env.multi_rotate(self.env.repeat_state(self.env.get_solved(), self.env.action_dim), self.env.iter_actions()),
+		))
+		self.first_states = self.env.as_oh( self.first_states )
 		self.first_state_values = list()
 
-		self.substate_val_stds = list()
-
-		self.avg_value_targets = list()
+		self.data = AnalysisData(list(), list())
 		self.param_changes = list()
 		self.param_total_changes = list()
-
-		self.policy_entropies = list()
-		self.rollout_policy = list()
 
 		self.log = logger
 		self.log.verbose(f"Analysis of this training was enabled. Extra analysis is done for evaluations and for first {extra_evals} rollouts")
@@ -66,18 +69,13 @@ class TrainAnalysis:
 		# First time
 		if self.params is None: self.params = net.get_params()
 
-		# Keeping track of the entropy off on the 12-dimensional log-probability policy-output
-		entropies = [entropy(policy, axis=1) for policy in self.rollout_policy]
-		#Currently:  Mean over all games in entire rollout. Maybe we want it more fine grained later.
-		self.policy_entropies.append(np.mean( [np.nanmean(entropy) for entropy in entropies] ))
-		self.rollout_policy = list() #reset for next rollout
 
 		if rollout in self.evaluations:
 			net.eval()
 
 			# Calculating value targets
 			targets = value_targets.cpu().numpy().reshape((-1, self.depth))
-			self.avg_value_targets.append(targets.mean(axis=0))
+			self.data.avg_value_targets.append(targets.mean(axis=0))
 
 			# Calculating model change
 			model_change = torch.sqrt((net.get_params()-self.params)**2).mean().cpu()
@@ -88,13 +86,13 @@ class TrainAnalysis:
 
 			#In the beginning: Calculate value given to first 12 substates
 			if rollout <= self.extra_evals:
-				self.first_state_values.append( net(self.first_states, policy=False, value=True).detach().cpu().numpy() )
+				self.first_state_values.append( net(self.first_states, policy=False, value=True).cpu().detach().numpy() )
 
 			net.train()
 
 	def ADI(self, values: torch.Tensor):
 		"""Saves statistics after a run of ADI. """
-		self.substate_val_stds.append(
+		self.data.substate_val_stds.append(
 			float(values.std(dim=1).mean())
 		)
 

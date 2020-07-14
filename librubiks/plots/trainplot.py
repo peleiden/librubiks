@@ -73,6 +73,7 @@ class TrainPlot:
 	# ANALYSIS PLOTS
 
 	def plot_substate_distributions(self, loc: str, show=False):
+		# TODO: Remove policy from this plot
 		self.log("Making plot of policy entropy and ADI value stds")
 
 		fig, entropy_ax = plt.subplots(figsize=(19.2, 10.8))

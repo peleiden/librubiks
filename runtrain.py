@@ -30,15 +30,15 @@ options = {
 		"type":     int,
 	},
 	'arch': {
-		'default':  'fc_small',
-		'help':     'Network architecture. fc_small or fc_big for fully connected, res_small or res_big for fully connected with residual blocks, and conv for convolutional blocks',
+		'default':  'fc',
+		'help':     'Network architecture. \'fc\' for fully-connected or \'res\' for fully-connected with residual blocks',
 		'type':     str,
-		'choices':  ['fc_small', 'fc_big', 'res_small', 'res_big', 'conv'],
+		'choices':  ['fc', 'res'],
 	},
 	'alpha_update': {
 		'default':  0,
-		'help': 'alpha is set to max{ alpha + alpha_update, 1} update_interval times during training. 0 for weighted and 1 for unweighted.\n'+
-		'alpha is a parameter that interpolates between no weighting of training examples (alpha=1) and weighting training examples by 1/depth (alpha=0).',
+		'help':     'alpha is set to max{alpha + alpha_update, 1} update_interval times during training. 0 for weighted and 1 for unweighted.\n'+
+		            'alpha is a parameter that interpolates between no weighting of training examples (alpha=1) and weighting training examples by 1/depth (alpha=0).',
 		'type':     float,
 	},
 	'update_interval': {

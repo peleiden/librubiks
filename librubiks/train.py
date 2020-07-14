@@ -9,8 +9,8 @@ import torch
 from librubiks import gpu, no_grad, reset_cuda, rc_params
 from librubiks.utils import Logger, NullLogger, unverbose, TickTock, TimeUnit
 
-from librubiks import envs
-from librubiks.analysis import TrainAnalysis
+from librubiks import envs, DataStorage
+from librubiks.analysis import TrainAnalysis, AnalysisData
 from librubiks.model import Model
 
 from librubiks.solving.agents import DeepAgent
@@ -18,7 +18,7 @@ from librubiks.solving.evaluation import Evaluator
 
 
 @dataclass
-class TrainData:
+class TrainData(DataStorage):
 	states_per_rollout: int  # Number of states backpropped each rollout
 	rollouts: int  # Number of rollouts (or epochs)
 	rollout_games: int  # Number of games per rollout
@@ -27,32 +27,8 @@ class TrainData:
 	evaluation_rollouts: np.ndarray  # Array containing every rollout on which an evaluation was performed
 	evaluation_results: np.ndarray  # Solve shares
 
-	def save(self, loc: str):
-		os.makedirs(loc, exist_ok=True)
-		with open(f"{loc}/traindata.json", "w", encoding="utf-8") as f:
-			json.dump({
-				"states_per_rollout": self.states_per_rollout,
-				"rollouts": self.rollouts,
-				"rollout_games": self.rollout_games,
-				"rollout_depth": self.rollout_depth,
-			}, f)
-		np.save(f"{loc}/trainlosses.npy", self.losses)
-		np.save(f"{loc}/evaluation_rollouts.npy", self.evaluation_rollouts)
-		np.save(f"{loc}/evaluation_results.npy", self.evaluation_results)
-	
-	@staticmethod
-	def load(loc: str):
-		with open(f"{loc}/traindata.json", encoding="utf-8") as f:
-			cfg = json.load(f)
-		return TrainData(
-			states_per_rollout  = cfg["states_per_rollout"],
-			rollouts            = cfg["rollouts"],
-			rollout_games       = cfg["rollout_games"],
-			rollout_depth       = cfg["rollout_depth"],
-			losses              = np.load(f"{loc}/trainlosses.npy"),
-			evaluation_rollouts = np.load(f"{loc}/evaluation_rollouts.npy"),
-			evaluation_results  = np.load(f"{loc}/evaluation_results.npy"),
-		)
+	subfolder = "train-data"
+	json_name = "train-data.json"
 
 
 class BatchFeedForward:
@@ -104,20 +80,20 @@ class Train:
 	def __init__(self,
 				 env: envs.Environment,
 				 rollouts: int,
-				 batch_size: int,  # Required to be > 1 when training with batchnorm
 				 rollout_games: int,
 				 rollout_depth: int,
+				 batch_size: int,  # Required to be > 1 when training with batchnorm
 				 optim_fn,
-				 alpha_update: float,
 				 lr: float,
 				 gamma: float,
+				 alpha_update: float,
+				 tau: float,
 				 update_interval: int,
+				 reward_method: str,
 				 agent: DeepAgent,
 				 evaluator: Evaluator,
 				 evaluation_interval: int,
 				 with_analysis: bool,
-				 tau: float,
-				 reward_method: str,
 				 value_criterion	= torch.nn.MSELoss,
 				 logger: Logger		= NullLogger(),
 			):
@@ -171,7 +147,7 @@ class Train:
 
 		self.tt = TickTock()
 
-	def train(self, net: Model) -> (Model, Model, TrainData, TrainAnalysis):
+	def train(self, net: Model) -> (Model, Model, TrainData, AnalysisData):
 		""" Training loop: generates data, optimizes parameters, evaluates (sometimes) and repeats.
 
 		Trains `net` for `self.rollouts` rollouts each consisting of `self.rollout_games` games and scrambled  `self.rollout_depth`.
@@ -194,12 +170,15 @@ class Train:
 			f"Rollouts: {self.rollouts}",
 			f"Each consisting of {self.rollout_games} games with a depth of {self.rollout_depth}",
 			f"Evaluations: {len(evaluation_rollouts)}",
+			f"Rough upper bound on total evaluation time during training: "
+			f"{TickTock.stringify_time(len(evaluation_rollouts)*self.evaluator.approximate_time(), TimeUnit.minute)}",
 		]))
 		best_solve = 0
 		best_net = net.clone()
 		self.agent.net = net
 		if self.with_analysis:
-			analysis = TrainAnalysis(evaluation_rollouts,
+			analysis = TrainAnalysis(self.env,
+									 evaluation_rollouts,
 									 self.rollout_games,
 									 self.rollout_depth,
 									 extra_evals=100,
@@ -315,7 +294,7 @@ class Train:
 			evaluation_results  = np.array(evaluation_results),
 		)
 
-		return net, best_net, traindata, analysis
+		return net, best_net, traindata, analysis.data if analysis is not None else None
 
 	def _update_gen_net(self, generator_net: Model, net: Model):
 		"""Create a network with parameters weighted by self.tau"""

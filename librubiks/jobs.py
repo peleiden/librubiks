@@ -1,32 +1,32 @@
 import sys, os
 from shutil import rmtree
-from glob import glob as glob #glob
+from glob import glob as glob  # glob
 
 import json
 
 import numpy as np
 import torch
 
-from librubiks.cube import get_is2024, with_used_repr, store_repr, restore_repr, set_is2024
+from librubiks import envs
 from librubiks.utils import get_commit, Logger
 
 from librubiks.model import Model, ModelConfig, create_net, save_net, load_net
 from librubiks.train import Train
 
 from librubiks.solving import agents
-from librubiks.solving.agents import PolicySearch, ValueSearch, DeepAgent, Agent
+from librubiks.solving.agents import ValueSearch, DeepAgent, Agent
 from librubiks.solving.evaluation import Evaluator
 
 
 class TrainJob:
 	eval_games = 200  # Not given as arguments to __init__, as they should be accessible in runtime_estim
 	max_time = 0.05
-	is2024: bool
 
 	def __init__(self,
-				 name: str,
 				 # Set by parser, should correspond to options in runtrain
+				 name: str,
 				 location: str,
+				 env: str,
 				 rollouts: int,
 				 rollout_games: int,
 				 rollout_depth: int,
@@ -37,21 +37,22 @@ class TrainJob:
 				 tau: float,
 				 update_interval: int,
 				 optim_fn: str,
-				 evaluation_interval: int,
-				 nn_init: str,
-				 is2024: bool,
-				 arch: str,
-				 analysis: bool,
 				 reward_method: str,
+				 arch: str,
+				 nn_init: str,
+				 evaluation_interval: int,
+				 analysis: bool,
 
-				 # Currently not set by argparser/configparser
-				 agent = PolicySearch(net=None),
-				 scrambling_depths: tuple = (10,),
-				 verbose: bool = True,
+				 # Not set by argparser/configparser
+				 # TODO: If agent becomes good enough, maybe evaluate on several different depths
+				 agent = ValueSearch(net=None),
+				 scrambling_depths: tuple = (12,),
 			):
 
 		self.name = name
 		assert isinstance(self.name, str)
+		
+		self.env = envs.get_env(env)
 
 		self.rollouts = rollouts
 		assert self.rollouts > 0
@@ -65,7 +66,7 @@ class TrainJob:
 		self.alpha_update = alpha_update
 		assert 0 <= alpha_update <= 1
 		self.lr = lr
-		assert float(lr) and lr <= 1
+		assert type(lr) == float and lr > 0
 		self.gamma = gamma
 		assert 0 < gamma <= 1
 		self.tau = tau
@@ -76,7 +77,7 @@ class TrainJob:
 		assert issubclass(self.optim_fn, torch.optim.Optimizer)
 
 		self.location = location
-		self.logger = Logger(f"{self.location}/train.log", name, verbose) #Already creates logger at init to test whether path works
+		self.logger = Logger(f"{self.location}/train.log", name)  # Already creates logger at init to test whether path works
 		self.logger.log(f"Initialized {self.name}")
 
 		self.evaluator = Evaluator(n_games=self.eval_games, max_time=self.max_time, scrambling_depths=scrambling_depths, logger=self.logger)
@@ -84,11 +85,11 @@ class TrainJob:
 		assert isinstance(self.evaluation_interval, int) and 0 <= self.evaluation_interval
 		self.agent = agent
 		assert isinstance(self.agent, DeepAgent)
-		self.is2024 = is2024
 
 		assert nn_init in ["glorot", "he"] or ( float(nn_init) or True ),\
 				f"Initialization must be glorot, he or a number, but was {nn_init}"
-		self.model_cfg = ModelConfig(architecture=arch, is2024=is2024, init=nn_init)
+		assert arch in ["fc", "res"]
+		self.model_cfg = ModelConfig(env, architecture=arch, init=nn_init)
 
 		self.analysis = analysis
 		assert isinstance(self.analysis, bool)
@@ -96,62 +97,45 @@ class TrainJob:
 		self.reward_method = reward_method
 		assert self.reward_method in ["paper", "lapanfix", "schultzfix", "reward0"]
 
-		assert arch in ["fc_small", "fc_big", "res_small", "res_big", "conv"]
-		if arch == "conv": assert not self.is2024
-		assert isinstance(self.model_cfg, ModelConfig)
-
-	@with_used_repr
 	def execute(self):
 
 		# Sets representation
-		self.logger.section(f"Starting job:\n{self.name} with {'20x24' if get_is2024() else '6x8x6'} representation\nLocation {self.location}\nCommit: {get_commit()}")
+		self.logger.section(f"Starting job:\n{self.name} using {self.env.name} environment\nLocation {self.location}\nCommit: {get_commit()}")
 
-		train = Train(self.rollouts,
-					  batch_size			= self.batch_size,
-					  rollout_games			= self.rollout_games,
-					  rollout_depth			= self.rollout_depth,
-					  optim_fn				= self.optim_fn,
-					  alpha_update			= self.alpha_update,
-					  lr					= self.lr,
-					  gamma					= self.gamma,
-					  tau					= self.tau,
-					  reward_method			= self.reward_method,
-					  update_interval		= self.update_interval,
-					  agent					= self.agent,
-					  logger				= self.logger,
-					  evaluation_interval	= self.evaluation_interval,
-					  evaluator				= self.evaluator,
-					  with_analysis			= self.analysis,
-			)
-		self.logger(f"Rough upper bound on total evaluation time during training: {len(train.evaluation_rollouts)*self.evaluator.approximate_time()/60:.2f} min")
+		train = Train(
+			env                 = self.env,
+			rollouts            = self.rollouts,
+			rollout_games       = self.rollout_games,
+			rollout_depth       = self.rollout_depth,
+			batch_size          = self.batch_size,
+			optim_fn            = self.optim_fn,
+			lr                  = self.lr,
+			gamma               = self.gamma,
+			alpha_update        = self.alpha_update,
+			tau                 = self.tau,
+			update_interval     = self.update_interval,
+			reward_method       = self.reward_method,
+			agent               = self.agent,
+			evaluator           = self.evaluator,
+			evaluation_interval = self.evaluation_interval,
+			with_analysis       = self.analysis,
+			logger              = self.logger,
+		)
 
 		net = create_net(self.model_cfg, self.logger)
-		net, best_net, traindata, analysis = train.train(net)
+		net, best_net, traindata, analysisdata = train.train(net)
 		save_net(net, self.location)
 		if self.evaluation_interval:
 			save_net(best_net, self.location, is_best=True)
+		traindata.save(self.location)
 
-		train.plot_training(self.location, name=self.name)
 		analysispath = os.path.join(self.location, "analysis")
 		datapath = os.path.join(self.location, "train-data")
 		os.mkdir(datapath)
 		os.mkdir(analysispath)
 
-		if analysis is not None:
-			analysis.plot_substate_distributions(analysispath)
-			analysis.plot_value_targets(analysispath)
-			analysis.plot_net_changes(analysispath)
-			analysis.visualize_first_states(analysispath)
-			np.save(f"{datapath}/avg_target_values.npy", analysis.avg_value_targets)
-			np.save(f"{datapath}/policy_entropies.npy", analysis.policy_entropies)
-			np.save(f"{datapath}/substate_val_stds.npy", analysis.substate_val_stds)
-
-		np.save(f"{datapath}/rollouts.npy", train.train_rollouts)
-		np.save(f"{datapath}/losses.npy", train.train_losses)
-		np.save(f"{datapath}/evaluation_rollouts.npy", train.evaluation_rollouts)
-		np.save(f"{datapath}/evaluations.npy", train.sol_percents)
-
-		return train.train_rollouts, train.train_losses
+		if analysisdata is not None:
+			analysisdata.save(datapath)
 
 	@staticmethod
 	def clean_dir(loc: str):
@@ -163,13 +147,12 @@ class TrainJob:
 			content = f.read()
 		rmtree(loc)
 		os.mkdir(loc)
-		with open(f"{loc}/train_config.ini", "w", encoding="utf-8") as f:
+		with open(tcpath, "w", encoding="utf-8") as f:
 			f.write(content)
 		return content
 
 
 class EvalJob:
-	is2024: bool
 
 	def __init__(self,
 				 name: str,

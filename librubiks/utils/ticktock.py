@@ -113,6 +113,8 @@ class TickTock:
 		return cls.thousand_seps(str_)
 
 	def stringify_sections(self, unit: Tuple[str, float]=TimeUnit.second):
+		# TODO: Less mess here
+		# TODO: Keep track of children/parent profiles to ensure correct printing
 		# Returns pretty sections
 		strs = [["Execution times", "Total time", "Hits", "Avg. time"]]
 		# std_strs = []
@@ -123,7 +125,7 @@ class TickTock:
 				"- " * v.depth + kw,
 				self.stringify_time(v.sum(), unit),
 				self.thousand_seps(len(v)),
-				self.stringify_time(v.mean(), TimeUnit.millisecond)# + " p/m ",
+				self.stringify_time(v.mean(), TimeUnit.millisecond)
 			])
 		# longest_std = max(len(x) for x in std_strs)
 		# std_strs = [" " * (longest_std-len(x)) + x for x in std_strs]
