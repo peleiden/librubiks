@@ -49,7 +49,7 @@ def generate_actions(agent: Agent, games: int, max_time: float):
 	sequences = list()
 	for i in range(games):
 		actions_taken = []
-		state, _, _ = cube.scramble(np.random.randint(100, 1000), True)
+		state, _ = cube.scramble(np.random.randint(100, 1000), True)
 		won = agent.search(state, max_time, None)
 		if not won: log(f"Game {i+1} was not won")
 		else:

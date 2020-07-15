@@ -25,7 +25,7 @@ class CubeBench:
 		self.log = log
 		self.tt = tt
 	
-	def rotate(self, n: int):
+	def act(self, n: int):
 		self.log.section(f"Benchmarking {TickTock.thousand_seps(n)} single rotations, {_repstr()}")
 		actions = np.random.randint(0, cube.action_dim, n)
 		state = cube.get_solved()
@@ -36,7 +36,7 @@ class CubeBench:
 			self.tt.end_profile()
 		self._log_method_results("Average rotation time", pname)
 	
-	def multi_rotate(self, n: int, n_states: int):
+	def multi_act(self, n: int, n_states: int):
 		self.log.section(f"Benchmarking {TickTock.thousand_seps(n)} multi rotations of "
 						 f"{TickTock.thousand_seps(n_states)} states each, {_repstr()}")
 		states = cube.repeat_state(cube.get_solved(), n_states)
@@ -117,8 +117,8 @@ def benchmark():
 		set_is2024(repr_)
 		log.section(f"Benchmarking cube enviroment with {_repstr()} representation")
 		tt.profile(f"Benchmarking cube environment, {_repstr()}")
-		cube_bench.rotate(cn)
-		cube_bench.multi_rotate(int(cn/multi_op_size), multi_op_size)
+		cube_bench.act(cn)
+		cube_bench.multi_act(int(cn / multi_op_size), multi_op_size)
 		cube_bench.onehot(cn)
 		cube_bench.multi_onehot(int(cn/multi_op_size), multi_op_size)
 		cube_bench.check_solution(cn)

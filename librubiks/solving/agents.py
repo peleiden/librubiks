@@ -3,8 +3,6 @@ from collections import deque
 import heapq
 
 import numpy as np
-import torch
-
 
 from librubiks import gpu, no_grad, envs
 from librubiks.utils import TickTock
@@ -21,7 +19,7 @@ class Agent(ABC):
 		self.tt = TickTock()
 
 	@no_grad
-	def search(self, state: np.ndarray, time_limit: float=None, max_states: int=None) -> bool:
+	def search(self, state: np.ndarray, time_limit: float = None, max_states: int = None) -> bool:
 		# Returns whether a path was found and generates action queue
 		# Implement _step method for agents that look one step ahead, otherwise overwrite this method
 		time_limit, max_states = self.reset(time_limit, max_states)
@@ -29,20 +27,20 @@ class Agent(ABC):
 
 		if self.env.is_solved(state): return True
 		while self.tt.tock() < time_limit and len(self) < max_states:
-			action, state, solution_found = self._step(state)
+			action, state, solution_found, states = self._step(state)
+			self._explored_states += states
 			self.action_queue.append(action)
 			if solution_found:
-				self._explored_states = len(self.action_queue)
 				return True
 
 		self._explored_states = len(self.action_queue)
 		return False
 
-	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
+	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool, int):
 		"""
 		Takes a step given a state
 		:param state: numpy array containing a state
-		:return: Action index, new state, is solved
+		:return: Action index, new state, is solved, states explored
 		"""
 		raise NotImplementedError
 
@@ -69,7 +67,7 @@ class DeepAgent(Agent, ABC):
 	def __init__(self, net: Model):
 		super().__init__(None)
 		self.net = net
-		self.env = net.env
+		self.env = net.env if net is not None else None
 
 	@classmethod
 	def from_saved(cls, loc: str, use_best: bool):
@@ -80,12 +78,16 @@ class DeepAgent(Agent, ABC):
 	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
 		raise NotImplementedError
 
+	def update_net(self, net: Model):
+		self.net = net
+		self.env = net.env
+
 
 class RandomSearch(Agent):
 	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
 		action = np.random.randint(self.env.action_dim)
-		state = self.env.rotate(state, self.env.action_space[action])
-		return action, state, self.env.is_solved(state)
+		state = self.env.act(state, action)
+		return action, state, self.env.is_solved(state), 1
 
 	def __str__(self):
 		return "Random depth-first search"
@@ -96,11 +98,12 @@ class BFS(Agent):
 	states = dict()
 
 	def search(self, state: np.ndarray, time_limit: float = None, max_states: int = None) -> (np.ndarray, bool):
-		# TODO: Use env.multi_act for le big speed
+		# TODO: Use self.env.multi_act for le big speed
 		time_limit, max_states = self.reset(time_limit, max_states)
 		self.tt.tick()
 
-		if self.env.is_solved(state): return True
+		if self.env.is_solved(state):
+			return True
 
 		# Each element contains the state from which it came and the action taken to get to it
 		self.states = { state.tostring(): (None, None) }
@@ -109,7 +112,7 @@ class BFS(Agent):
 			state = queue.popleft()
 			tstate = state.tostring()
 			for i, action in enumerate(self.env.action_space):
-				new_state = self.env.rotate(state, *action)
+				new_state = self.env.act(state, action)
 				new_tstate = new_state.tostring()
 				if new_tstate in self.states:
 					continue
@@ -135,16 +138,16 @@ class BFS(Agent):
 class ValueSearch(DeepAgent):
 
 	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
-		substates = self.env.multi_rotate(self.env.repeat_state(state, self.env.action_dim), self.env.iter_actions())
+		substates = self.env.multi_act(self.env.repeat_state(state, self.env.action_dim), self.env.iter_actions())
 		solutions = self.env.multi_is_solved(substates)
 		if np.any(solutions):
 			action = np.where(solutions)[0][0]
-			return action, substates[action], True
+			return action, substates[action], True, self.env.action_dim
 		else:
 			substates_oh = self.env.as_oh(substates)
-			v = self.net(substates_oh, policy=False).squeeze().cpu().numpy()
+			v = self.net(substates_oh).squeeze().cpu().numpy()
 			action = np.argmax(v)
-			return action, substates[action], False
+			return action, substates[action], False, self.env.action_dim
 
 	def __str__(self):
 		return "Greedy value"
@@ -186,8 +189,8 @@ class AStar(DeepAgent):
 	parents: np.ndarray
 	parent_actions: np.ndarray
 
-
 	_stack_expand = 1000
+
 	def __init__(self, net: Model, lambda_: float, expansions: int):
 		"""Init data structure, save params
 
@@ -200,7 +203,7 @@ class AStar(DeepAgent):
 		self.expansions = expansions
 
 	@no_grad
-	def search(self, state: np.ndarray, time_limit: float=None, max_states: int=None) -> bool:
+	def search(self, state: np.ndarray, time_limit: float = None, max_states: int = None) -> bool:
 		"""Seaches according to the batched, weighted A* algorithm
 
 		While there is time left, the algorithm finds the best `expansions` open states
@@ -209,11 +212,12 @@ class AStar(DeepAgent):
 		"""
 		self.tt.tick()
 		time_limit, max_states = self.reset(time_limit, max_states)
-		if self.env.is_solved(state): return True
+		if self.env.is_solved(state):
+			return True
 
-			#First node
+		# First node
 		self.indices[state.tostring()], self.states[1], self.G[1] = 1, state, 0
-		heapq.heappush( self.open_queue, (0, 1) ) #Given cost 0: Should not matter; just to avoid np.empty weirdness
+		heapq.heappush(self.open_queue, (0, 1))  # Given cost 0: Should not matter; just to avoid np.empty weirdness
 
 		while self.tt.tock() < time_limit and len(self) + self.expansions * self.env.action_dim <= max_states:
 			self.tt.profile("Remove nodes from open priority queue")
@@ -222,13 +226,11 @@ class AStar(DeepAgent):
 			self.tt.end_profile("Remove nodes from open priority queue")
 
 			is_won = self.expand_batch(expand_idcs)
-			if is_won: #🦀🦀🦀WE DID IT BOIS🦀🦀🦀
+			if is_won:  # 🦀🦀🦀WE DID IT BOIS🦀🦀🦀
 				i = self.indices[ self.env.get_solved().tostring() ]
-					#Build action queue
+				# Build action queue
 				while i != 1:
-					self.action_queue.appendleft(
-						self.parent_actions[i]
-					)
+					self.action_queue.appendleft(self.parent_actions[i])
 					i = self.parents[i]
 				return True
 		return False
@@ -257,7 +259,7 @@ class AStar(DeepAgent):
 
 		self.tt.profile("Calculate substates")
 		parent_idcs = np.repeat(expand_idcs, self.env.action_dim, axis=0)
-		substates = self.env.multi_rotate(
+		substates = self.env.multi_act(
 			self.states[parent_idcs],
 			self.env.iter_actions(expand_size)
 		)
@@ -269,21 +271,22 @@ class AStar(DeepAgent):
 		get_substate_strs = lambda bools: [s for s, b in zip(substate_strs, bools) if b]
 		seen_substates = np.array([s in self.indices for s in substate_strs])
 		unseen_substates = ~seen_substates
-			# Handle duplicates
-		first_occurences	= np.zeros(len(substate_strs), dtype=bool)
-		_, first_indeces	= np.unique(substate_strs, return_index=True)
+
+		# Handle duplicates
+		first_occurences    = np.zeros(len(substate_strs), dtype=bool)
+		_, first_indeces    = np.unique(substate_strs, return_index=True)
 		first_occurences[first_indeces] = True
-		first_seen			= first_occurences & seen_substates
-		first_unseen		= first_occurences & unseen_substates
+		first_seen          = first_occurences & seen_substates
+		first_unseen        = first_occurences & unseen_substates
 		self.tt.end_profile("Find new substates")
 
 		self.tt.profile("Add substates to data structure")
-		new_states			= substates[first_unseen]
-		new_states_idcs		= len(self) + np.arange(first_unseen.sum()) + 1
-		new_idcs_dict		= { s: i for i, s in zip(new_states_idcs, get_substate_strs(first_unseen)) }
+		new_states          = substates[first_unseen]
+		new_states_idcs     = len(self) + np.arange(first_unseen.sum()) + 1
+		new_idcs_dict       = { s: i for i, s in zip(new_states_idcs, get_substate_strs(first_unseen)) }
 		self.indices.update(new_idcs_dict)
-		substate_idcs		= np.array([self.indices[s] for s in substate_strs])
-		old_states_idcs		= substate_idcs[first_seen]
+		substate_idcs       = np.array([self.indices[s] for s in substate_strs])
+		old_states_idcs     = substate_idcs[first_seen]
 
 		self.states[new_states_idcs] = substates[first_unseen]
 		self.tt.end_profile("Add substates to data structure")
@@ -293,7 +296,8 @@ class AStar(DeepAgent):
 		self.G[new_states_idcs] = self.G[new_parent_idcs] + 1
 		self.parent_actions[new_states_idcs] = actions_taken[first_unseen]
 		self.parents[new_states_idcs] = new_parent_idcs
-			# Add the new states to "open" priority queue
+
+		# Add the new states to "open" priority queue
 		costs = self.cost(new_states, new_states_idcs)
 		for i, cost in enumerate(costs):
 			heapq.heappush(self.open_queue, (cost, new_states_idcs[i]))
@@ -306,7 +310,7 @@ class AStar(DeepAgent):
 		self.tt.end_profile("Check whether won")
 
 		self.tt.profile("Old states: Update parents and G")
-		seen_batch_idcs = np.where(first_seen) #Old idcs corresponding to first_seen
+		seen_batch_idcs = np.where(first_seen)  # Old idcs corresponding to first_seen
 		self.relax_seen_states( old_states_idcs, parent_idcs[seen_batch_idcs], actions_taken[seen_batch_idcs] )
 		self.tt.end_profile("Old states: Update parents and G")
 
@@ -327,8 +331,8 @@ class AStar(DeepAgent):
 			2. ELSE IF G of parent + 1 is lower than  G of child:
 				Update substate's G and set state as its' parent
 		```
-		:param states_idcs: Vector, shape (batch_size,) of indeces in `self.states` of already seen states to consider for relaxation
-		:param parents_idcs: Vector, shape (batch_size,) of indeces in `self.states` of the parents of these
+		:param state_idcs: Vector, shape (batch_size,) of indeces in `self.states` of already seen states to consider for relaxation
+		:param parent_idcs: Vector, shape (batch_size,) of indeces in `self.states` of the parents of these
 		:param actions_taken: Vector, shape (batch_size,) where actions_taken[i], in [0, 12], corresponds\
 							to action taken from parent i to get to child i
 		"""
@@ -336,9 +340,9 @@ class AStar(DeepAgent):
 		new_ways = self.G[parent_idcs] + 1 < self.G[state_idcs]
 		new_way_states, new_way_parents = state_idcs[new_ways], parent_idcs[new_ways]
 
-		self.G[new_way_states]					= self.G[new_way_parents] + 1
-		self.parent_actions[ new_way_states]	= actions_taken[new_ways]
-		self.parents[new_way_states]			= new_way_parents
+		self.G[new_way_states]               = self.G[new_way_parents] + 1
+		self.parent_actions[ new_way_states] = actions_taken[new_ways]
+		self.parents[new_way_states]         = new_way_parents
 
 		# Case: Shortcuts through the substates: When the substate is a new shortcut to its parent
 		shortcuts = self.G[state_idcs] + 1 < self.G[parent_idcs]
@@ -385,7 +389,7 @@ class AStar(DeepAgent):
 
 	@classmethod
 	def from_saved(cls, loc: str, use_best: bool, lambda_: float, expansions: int) -> DeepAgent:
-		net = load_net(loc, load_best=use_best).to(gpu)
+		net = load_net(loc, load_best=use_best)
 		return cls(net, lambda_=lambda_, expansions=expansions)
 
 	def __len__(self) -> int:

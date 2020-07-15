@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import matplotlib.colors as mcolour
 import matplotlib.pyplot as plt
@@ -10,6 +12,12 @@ plt.rcParams.update(rc_params)
 base_colours = list(mcolour.BASE_COLORS)
 tab_colours = list(mcolour.TABLEAU_COLORS)
 all_colours = base_colours[:-1] + tab_colours[:-2]
+
+
+def _get_a_value(obj: dict):
+	"""Returns a vaue from the object"""
+	return obj[list(obj.keys())[0]]
+
 
 class EvalPlot:
 
@@ -34,29 +42,24 @@ class EvalPlot:
 		tab_colours = list(mcolour.TABLEAU_COLORS)
 		colours = [tab_colours[i%len(tab_colours)] for i in range(len(eval_results))]
 
+		d = _get_a_value(eval_settings)["scrambling_depths"][-1]
 		save_paths = [
 			cls._plot_depth_win(eval_results, save_dir, eval_settings, colours, title),
 			cls._sol_length_boxplots(eval_results, save_dir, eval_settings, colours),
+			cls._time_states_winrate_plot(eval_results, eval_times, True, d, save_dir, eval_settings, colours),
+			cls._time_states_winrate_plot(eval_results, eval_states, False, d, save_dir, eval_settings, colours),
 		]
-		# Only plot (time, winrate), (states, winrate), and their distributions if settings are the same
-		if all(cls.check_equal_settings(eval_settings)):
-			d = cls._get_a_value(eval_settings)["scrambling_depths"][-1]
-			save_paths.extend([
-				cls._time_states_winrate_plot(eval_results, eval_times, True, d, save_dir, eval_settings, colours),
-				cls._time_states_winrate_plot(eval_results, eval_states, False, d, save_dir, eval_settings, colours),
-			])
-			p = cls._distribution_plots(eval_results, eval_times, eval_states, d, save_dir, eval_settings, colours)
-			if p != "ERROR":
-				save_paths.extend(p)
+		p = cls._distribution_plots(eval_results, eval_times, eval_states, d, save_dir, eval_settings, colours)
+		if p != "ERROR":
+			save_paths.extend(p)
 
 		return save_paths
 	
 	@classmethod
 	def _plot_depth_win(cls, eval_results: dict, save_dir: str, eval_settings: dict, colours: list, title: str='') -> str:
 		# depth, win%-graph
-		games_equal, times_equal = cls.check_equal_settings(eval_settings)
 		fig, ax = plt.subplots(figsize=(19.2, 10.8))
-		ax.set_ylabel(f"Percentage of {cls._get_a_value(eval_settings)['n_games']} games won" if games_equal else "Percentage of games won")
+		ax.set_ylabel(f"Percentage of {cls._get_a_value(eval_settings)['n_games']} games won")
 		ax.set_xlabel(f"Scrambling depth: Number of random rotations applied to cubes")
 		ax.locator_params(axis='x', integer=True, tight=True)
 
@@ -70,7 +73,7 @@ class EvalPlot:
 		ax.legend()
 		ax.set_ylim([-5, 105])
 		ax.grid(True)
-		ax.set_title(title if title else (f"Percentage of cubes solved in {cls._get_a_value(eval_settings)['max_time']:.2f} seconds" if times_equal else "Cubes solved"))
+		ax.set_title(title if title else (f"Percentage of cubes solved in {cls._get_a_value(eval_settings)['max_time']:.2f} seconds"))
 		fig.tight_layout()
 
 		path = os.path.join(save_dir, "eval_winrates.png")

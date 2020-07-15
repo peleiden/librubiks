@@ -21,9 +21,9 @@ class TestRubiksCube(MainTest):
 
 	def test_cube(self):
 		self._rotation_tests(env2024)
-		self._multi_rotate_test(env2024)
+		self._multi_act_test(env2024)
 		self._rotation_tests(env686)
-		self._multi_rotate_test(env686)
+		self._multi_act_test(env686)
 
 	def _rotation_tests(self, env: envs.Environment):
 		state = env.get_solved()
@@ -86,7 +86,7 @@ class TestRubiksCube(MainTest):
 			"      3 0 3            ",
 		])
 
-	def _multi_rotate_test(self, env: envs.Environment):
+	def _multi_act_test(self, env: envs.Environment):
 		states = np.array([env.get_solved()]*5)
 		for _ in range(10):
 			actions = env.sample_actions(5)

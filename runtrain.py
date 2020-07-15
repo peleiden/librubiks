@@ -2,15 +2,13 @@ import os
 from shutil import rmtree
 from ast import literal_eval
 
+from librubiks.envs import environments
 from librubiks.utils import get_timestamp, Parser, set_seeds
 from librubiks.jobs import TrainJob
 
-####
-# Should correspond to arguments in librubiks.jobs.Trainjob
-####
 options = {
 	'location': {
-		'default':  'data/local_train'+get_timestamp(for_file=True),
+		'default':  'data/local_train' + get_timestamp(for_file=True),
 		'help':     "Save location for logs and plots",
 		'type':     str,
 	},
@@ -90,11 +88,11 @@ options = {
 		'help':     'Initialialization strategy for the NN. Choose either "glorot", "he" or write a number. If a number is given, the network is initialized to this constant.',
 		'type':     str,
 	},
-	'is2024': {
-		'default':  True,
-		'help':     'True for 20x24 Rubiks representation and False for 6x8x6',
-		'type':     literal_eval,
-		'choices':  [True, False],
+	'env_key': {
+		'default':  'cube2024',
+		'help':     'The environment that should be trained on',
+		'type':     str,
+		'choices':  list(environments.keys()),
 	},
 	'analysis': {
 		'default':  False,

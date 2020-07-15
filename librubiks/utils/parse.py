@@ -126,12 +126,8 @@ class Parser:
 
 		return experiments, with_config
 
-
 	def _document_settings(self, with_config: bool):
-		"""
-		Saves all settings used for experiments for reproducability.
-		"""
-
+		"""Saves all settings used for experiments for reproducability"""
 		os.makedirs(self.save_location, exist_ok = True)
 
 		with open(f"{self.save_location}/{self.name}_config.ini", 'w') as f:

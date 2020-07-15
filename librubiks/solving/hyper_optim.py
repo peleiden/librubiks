@@ -105,7 +105,7 @@ class GridSearch(Optimizer):
 			self.parameter_history.append(next_params)
 			self.logger.section(f"Optimization {i}\n\tChosen parameters: {self.format_params(next_params, prep=self.param_prepper)}")
 			
-			score, _, _ = self.target_function(next_params)
+			score, _ = self.target_function(next_params)
 			self.score_history.append(score)
 			scores[tuple(index)] = score
 			self.logger(f"\tScore:             {score}", with_timestamp=False)
@@ -168,7 +168,7 @@ class BayesianOptimizer(Optimizer):
 			self.parameter_history.append(next_params)
 			self.logger(f"Optimization {i}: Chosen parameters:\t: {self.format_params(next_params, prep=self.param_prepper)}")
 
-			score, _, _ = self.target_function(next_params)
+			score, _ = self.target_function(next_params)
 			self.score_history.append(score)
 			self.logger(f"Optimization {i}: Score: {score}")
 

@@ -31,7 +31,6 @@ from librubiks.envs.cube_maps import SimpleState, get_corner_pos, get_side_pos, 
 #########################
 
 class Environment(ABC):
-
 	key: str
 	dtype = np.int8
 	action_dim: int
@@ -80,7 +79,7 @@ class Environment(ABC):
 		"""
 		Returns an n long boolean vector containing whether or not the n given states are solved
 		"""
-		return (states == self.get_solved_instance()).all(axis=tuple(range(1, len(self.shape)+1)))
+		return (states == self.get_solved_instance()).all(axis=tuple(range(1, len(self.shape) + 1)))
 
 	def as_oh(self, state: np.ndarray) -> torch.tensor:
 		"""
@@ -123,7 +122,7 @@ class Environment(ABC):
 		Useful in combination with repeat_state
 		"""
 		return np.tile(self.action_space, n)
-	
+
 	def sample_actions(self, n: int = 1):
 		"""
 		Randomly samples n actions in the action space
@@ -143,7 +142,7 @@ class Environment(ABC):
 	# Scrambling logic #
 	####################
 
-	def scramble(self, depth: int, force_not_solved = False) -> (np.ndarray, np.ndarray, np.ndarray):
+	def scramble(self, depth: int, force_not_solved=False) -> (np.ndarray, np.ndarray, np.ndarray):
 		actions = np.random.randint(0, self.action_dim, depth)
 		state = self.get_solved()
 		for action in actions:
@@ -170,9 +169,10 @@ class Environment(ABC):
 		states = np.vstack(np.transpose(states, (1, 0, *np.arange(2, len(self.shape) + 2))))
 		oh_states = self.multi_as_oh(states)
 		return states, oh_states
-	
+
 	def __str__(self):
 		raise NotImplementedError
+
 
 ################
 # ENVIRONMENTS #
@@ -237,7 +237,7 @@ class _Cube(Environment, ABC):
 		for i in range(12):
 			tensor_state[i + 8] = get_side_pos(solved_state.sides[i], solved_state.side_orientations[i])
 		return tensor_state
-	
+
 	def _face_dir(self, actions):
 		"""
 		Converts one or more actions to legacy type actions, that is face 0-5 and direction (0 for negative, 1 for positive)
@@ -248,7 +248,6 @@ class _Cube(Environment, ABC):
 
 
 class _Cube2024(_Cube):
-
 	oh_size = 480
 
 	corner_side_idcs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
@@ -257,6 +256,7 @@ class _Cube2024(_Cube):
 	def __init__(self, key: str):
 		super().__init__(key)
 		self._solved_instance = self._get_2024solved()
+		self.shape = self._solved_instance.shape
 		self.corner_633map, self.side_633map = get_633maps(self.F, self.B, self.T, self.D, self.L, self.R)
 		self.maps = get_tensor_map(self.dtype)
 		self.corner_maps, self.side_maps = self.maps
@@ -308,13 +308,12 @@ class _Cube2024(_Cube):
 			state633[self.side_633map[pos][1]] = values[1]
 
 		return state633
-	
+
 	def __str__(self):
 		return "Cube 20x24"
 
 
 class _Cube686(_Cube):
-
 	oh_size = 288
 
 	# Maps an 8 long vector starting at (0, 0) in 3x3 onto a 9 long vector which can be reshaped to 3x3
@@ -325,6 +324,7 @@ class _Cube686(_Cube):
 	def __init__(self, key: str):
 		super().__init__(key)
 		self._solved_instance = self._get_686solved()
+		self.shape = self._solved_instance.shape
 
 		# No shame
 		self._Cube686_n3_03 = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
@@ -363,7 +363,8 @@ class _Cube686(_Cube):
 
 		altered_states = states.copy()
 		ini_states = np.array([state[n] for state, n in zip(states, neighbors_686[faces])])
-		for altered_state, state, ini_state, face, direction in zip(altered_states, states, ini_states, faces, directions):
+		for altered_state, state, ini_state, face, direction in zip(altered_states, states, ini_states, faces,
+																	directions):
 			if direction:
 				altered_state[face] = state[face, self.roll_right]
 				altered_state[self.neighbor_idcs_pos[face], self.adjacents] = ini_state[
@@ -391,7 +392,7 @@ class _Cube686(_Cube):
 		for i in range(6):
 			state69[i, self.map633] = np.roll(state68[i], -self.shifts[i], axis=0)
 		return state69.reshape((6, 3, 3))
-	
+
 	def __str__(self):
 		return "Cube 6x8x6"
 
@@ -400,6 +401,7 @@ environments = {
 	"cube2024": _Cube2024,
 	"cube686": _Cube686,
 }
+
 
 def get_env(env: str) -> Environment:
 	assert env in environments, f"Environment must be one of " + ", ".join(environments.keys()) + f", not {env}"

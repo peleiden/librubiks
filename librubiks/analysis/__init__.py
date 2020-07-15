@@ -47,12 +47,12 @@ class TrainAnalysis:
 
 		self.first_states = np.stack((
 			self.env.get_solved(),
-			*self.env.multi_rotate(self.env.repeat_state(self.env.get_solved(), self.env.action_dim), self.env.iter_actions()),
+			*self.env.multi_act(self.env.repeat_state(self.env.get_solved(), self.env.action_dim), self.env.iter_actions()),
 		))
 		self.first_states = self.env.as_oh( self.first_states )
 		self.first_state_values = list()
 
-		self.data = AnalysisData(list(), list())
+		self.data = AnalysisData(np.array([]), np.array([]))
 		self.param_changes = list()
 		self.param_total_changes = list()
 
@@ -67,15 +67,18 @@ class TrainAnalysis:
 		:param torch.Tensor value_targets: Used for visualizing value change
 		"""
 		# First time
-		if self.params is None: self.params = net.get_params()
-
+		if self.params is None:
+			self.params = net.get_params()
 
 		if rollout in self.evaluations:
 			net.eval()
 
 			# Calculating value targets
 			targets = value_targets.cpu().numpy().reshape((-1, self.depth))
-			self.data.avg_value_targets.append(targets.mean(axis=0))
+			self.data.avg_value_targets = np.append(
+				self.data.avg_value_targets,
+				targets.mean(axis=0),
+			)
 
 			# Calculating model change
 			model_change = torch.sqrt((net.get_params()-self.params)**2).mean().cpu()
@@ -84,16 +87,17 @@ class TrainAnalysis:
 			self.param_changes.append(float(model_change))
 			self.param_total_changes.append(model_total_change)
 
-			#In the beginning: Calculate value given to first 12 substates
+			# In the beginning: Calculate value given to first 12 substates
 			if rollout <= self.extra_evals:
-				self.first_state_values.append( net(self.first_states, policy=False, value=True).cpu().detach().numpy() )
+				self.first_state_values.append( net(self.first_states).cpu().detach().numpy() )
 
 			net.train()
 
 	def ADI(self, values: torch.Tensor):
 		"""Saves statistics after a run of ADI. """
-		self.data.substate_val_stds.append(
-			float(values.std(dim=1).mean())
+		self.data.substate_val_stds = np.append(
+			self.data.substate_val_stds,
+			float(values.std(dim=1).mean()),
 		)
 
 	def _get_evaluations_for_value(self):

@@ -6,19 +6,21 @@ from tests import MainTest
 from librubiks import gpu, envs
 from librubiks.model import Model, ModelConfig, create_net, load_net, save_net
 
-from librubiks.solving.agents import Agent, RandomSearch, BFS, PolicySearch, ValueSearch, EGVM, MCTS, AStar
+from librubiks.solving.agents import Agent, RandomSearch, BFS, ValueSearch, AStar
 
 env = envs.get_env("cube2024")
+
 
 def _action_queue_test(state, agent, sol_found):
 	assert all([0 <= x < env.action_dim for x in agent.action_queue])
 	for action in agent.action_queue:
-		state = env.rotate(state, env.action_space[action])
+		state = env.act(state, env.action_space[action])
 	assert env.is_solved(state) == sol_found
+
 
 class TestAgents(MainTest):
 	def test_agents(self):
-		net = create_net(ModelConfig(env))
+		net = create_net(ModelConfig(env.key))
 		agents = [
 			RandomSearch(),
 			BFS(),
@@ -27,10 +29,10 @@ class TestAgents(MainTest):
 		for s in agents: self._test_agents(s)
 
 	def _test_agents(self, agent: Agent):
-		state, _, _ = env.scramble(4)
+		state, _ = env.scramble(4)
 		solution_found  = agent.search(state, .05)
 		for action in agent.action_queue:
-			state = env.rotate(state, env.action_space[action])
+			state = env.act(state, action)
 		assert solution_found == env.is_solved(state)
 
 
@@ -57,19 +59,19 @@ class TestAStar(MainTest):
 		is_solved = agent.search(state, time_limit=1)
 		if is_solved:
 			for action in agent.action_queue:
-				state = env.rotate(state, env.action_space[action])
+				state = env.act(state, env.action_space[action])
 			assert env.is_solved(state)
 
 	def test_expansion(self):
-		net = create_net(ModelConfig(env)).eval()
-		init_state, _, _ = env.scramble(3)
+		net = create_net(ModelConfig(env.key)).eval()
+		init_state, _ = env.scramble(3)
 		agent = AStar(net, lambda_=0.1, expansions=5)
 		agent.search(init_state, time_limit=1)
 		init_idx = agent.indices[init_state.tostring()]
 		assert init_idx == 1
 		assert agent.G[init_idx]  == 0
 		for action in env.action_space:
-			substate = env.rotate(init_state, action)
+			substate = env.act(init_state, action)
 			idx = agent.indices[substate.tostring()]
 			assert agent.G[idx] == 1
 			assert agent.parents[idx] == init_idx

@@ -1,12 +1,9 @@
-import os
-import json
 from dataclasses import dataclass
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from librubiks import gpu, no_grad, reset_cuda, rc_params
+from librubiks import gpu, no_grad, reset_cuda
 from librubiks.utils import Logger, NullLogger, unverbose, TickTock, TimeUnit
 
 from librubiks import envs, DataStorage
@@ -75,29 +72,32 @@ class BatchFeedForward:
 		slices = [slice(i*slice_size, (i+1)*slice_size) for i in range(self.batches)]
 		return slices
 
+
 class Train:
 
-	def __init__(self,
-				 env: envs.Environment,
-				 rollouts: int,
-				 rollout_games: int,
-				 rollout_depth: int,
-				 batch_size: int,  # Required to be > 1 when training with batchnorm
-				 optim_fn,
-				 lr: float,
-				 gamma: float,
-				 alpha_update: float,
-				 tau: float,
-				 update_interval: int,
-				 reward_method: str,
-				 agent: DeepAgent,
-				 evaluator: Evaluator,
-				 evaluation_interval: int,
-				 with_analysis: bool,
-				 value_criterion	= torch.nn.MSELoss,
-				 logger: Logger		= NullLogger(),
-			):
-		"""Sets up evaluation array, instantiates critera and stores and documents settings
+	def __init__(
+		self,
+		env: envs.Environment,
+		rollouts: int,
+		rollout_games: int,
+		rollout_depth: int,
+		batch_size: int,  # Required to be > 1 when training with batchnorm
+		optim_fn,
+		lr: float,
+		gamma: float,
+		alpha_update: float,
+		tau: float,
+		update_interval: int,
+		reward_method: str,
+		agent: DeepAgent,
+		evaluator: Evaluator,
+		evaluation_interval: int,
+		with_analysis: bool,
+		value_criterion = torch.nn.MSELoss,
+		logger: Logger = NullLogger(),
+	):
+		"""
+		Sets up evaluation array, instantiates critera and stores and documents settings
 
 		:param bool with_analysis: If true, a number of statistics relating to loss behaviour and model output are stored.
 		:param float alpha_update: alpha <- alpha + alpha_update every update_interval rollouts (excl. rollout 0)
@@ -154,9 +154,9 @@ class Train:
 		The network is evaluated for each rollout number in `self.evaluations` according to `self.evaluator`.
 		Stores multiple performance and training results.
 
-		:param torch.nn.Model net: The network to be trained. Must accept input consistent with self.envget_oh_size()
+		:param torch.nn.Model net: The network to be trained. Must accept input consistent with self.env.get_oh_size()
 		:return: The network after all evaluations and the network with the best evaluation score (win fraction)
-		:rtype: (torch.nn.Model, torch.nn.Model)
+		:rtype: (torch.nn.Model, torch.nn.Model, TrainData, AnalysisData)
 		"""
 
 		self.tt.reset()
@@ -175,7 +175,7 @@ class Train:
 		]))
 		best_solve = 0
 		best_net = net.clone()
-		self.agent.net = net
+		self.agent.update_net(net)
 		if self.with_analysis:
 			analysis = TrainAnalysis(self.env,
 									 evaluation_rollouts,
@@ -203,7 +203,7 @@ class Train:
 			ff.update_net(generator_net)
 
 			self.tt.profile("ADI training data")
-			training_data, value_targets, loss_weights = ADI_traindata(self, ff, alpha)
+			training_data, value_targets, loss_weights = ADI_traindata(self, ff, alpha, analysis)
 			self.tt.profile("To cuda")
 			training_data = training_data.to(gpu)
 			value_targets = value_targets.to(gpu)
@@ -241,7 +241,7 @@ class Train:
 					alpha = 1
 
 			if self.log.is_verbose() or rollout in (np.linspace(0, 1, 20)*self.rollouts).astype(int):
-				self.log(f"Rollout {rollout} completed with mean loss {self.train_losses[rollout]}")
+				self.log(f"Rollout {rollout} completed with mean loss {losses[rollout]}")
 
 			if self.with_analysis:
 				self.tt.profile("Analysis of rollout")
@@ -251,21 +251,21 @@ class Train:
 			if rollout in evaluation_rollouts:
 				net.eval()
 
-				self.agent.net = net
+				self.agent.update_net(net)
 				self.tt.profile(f"Evaluating using agent {self.agent}")
 				with unverbose:
-					eval_results, _, _ = self.evaluator.eval(self.agent)
-				eval_reward = (eval_results != -1).mean()
-				evaluation_results.append(eval_reward)
+					eval_results = self.evaluator.eval([self.agent])
+				eval_solved = (eval_results.sol_lengths != -1).mean()
+				evaluation_results.append(eval_solved)
 				self.tt.end_profile(f"Evaluating using agent {self.agent}")
 
-				if eval_reward > best_solve:
-					best_solve = eval_reward
+				if eval_solved > best_solve:
+					best_solve = eval_solved
 					best_net = net.clone()
-					self.log(f"Updated best net with solve rate {eval_reward*100:.2f} % at depth {self.evaluator.scrambling_depths}")
+					self.log(f"Updated best net with solve rate {eval_solved*100:.2f} % at depth {self.evaluator.scrambling_depths}")
 
 		self.log.section("Finished training")
-		if len(evaluation_rollouts.size):
+		if evaluation_rollouts.size:
 			self.log(f"Best net solves {best_solve*100:.2f} % of games at depth {self.evaluator.scrambling_depths}")
 		self.log.verbose("Training time distribution")
 		self.log.verbose(self.tt)
@@ -287,7 +287,7 @@ class Train:
 		traindata = TrainData(
 			states_per_rollout  = self.states_per_rollout,
 			rollouts            = self.rollouts,
-			games_per_rollout   = self.rollout_games,
+			rollout_games       = self.rollout_games,
 			rollout_depth       = self.rollout_depth,
 			losses              = losses,
 			evaluation_rollouts = evaluation_rollouts,
@@ -303,8 +303,8 @@ class Train:
 		new_genparams = dict(genparams)
 		for pname, param in netparams.items():
 			new_genparams[pname].data.copy_(
-					self.tau * param.data.to(gpu) + (1-self.tau) * new_genparams[pname].data.to(gpu)
-					)
+				self.tau * param.data.to(gpu) + (1-self.tau) * new_genparams[pname].data.to(gpu)
+			)
 		generator_net.load_state_dict(new_genparams)
 		self.tt.end_profile("Creating generator network")
 		return generator_net.to(gpu)
@@ -339,21 +339,17 @@ class Train:
 
 
 @no_grad
-def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float) -> (torch.tensor, torch.tensor, torch.tensor):
+def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float, analysis: TrainAnalysis) -> (torch.tensor, torch.tensor, torch.tensor):
 	""" Training data generation
 
 	Implements Autodidactic Iteration as per McAleer, Agostinelli, Shmakov and Baldi, "Solving the Rubik's Cube Without Human Knowledge" section 4.1
 	Loss weighting is dependant on `self.loss_weighting`.
 
-	:param torch.nn.Model net: The network used for generating the training data. This should according to ADI be the network from the last rollout.
-	:param int rollout:  The current rollout number. Used in adaptive loss weighting.
 
-	:return:  Games * sequence_length number of observations divided in four arrays
+	:return: Games * sequence_length number of observations divided in four arrays
 		- states contains the rubiks state for each data point
 		- policy_targets and value_targets contains optimal value and policy targets for each training point
 		- loss_weights contains the weight for each training point (see weighted samples subsection of McAleer et al paper)
-
-	:rtype: (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor)
 	"""
 
 	train.tt.profile("Scrambling")
@@ -370,10 +366,10 @@ def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float) -> (torch.te
 
 	# Generates possible substates for all scrambled states. Shape: n_states*action_dim x *Cube_shape
 	train.tt.profile("ADI substates")
-	substates = train.env.multi_rotate(np.repeat(states, train.env.action_dim, axis=0), train.env.iter_actions(len(states)))
+	substates = train.env.multi_act(np.repeat(states, train.env.action_dim, axis=0), train.env.iter_actions(len(states)))
 	train.tt.end_profile()
 	train.tt.profile("One-hot encoding")
-	substates_oh = train.envas_oh(substates)
+	substates_oh = train.env.multi_as_oh(substates)
 	train.tt.end_profile()
 
 	train.tt.profile("Reward")
@@ -382,6 +378,7 @@ def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float) -> (torch.te
 	rewards = (torch.zeros if train.reward_method == 'reward0' else torch.ones)\
 		(*solved_substates.shape)
 	rewards[~solved_substates] = -1
+	rewards = rewards.unsqueeze(1)
 	train.tt.end_profile()
 
 	# Generates policy and value targets
@@ -409,9 +406,9 @@ def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float) -> (torch.te
 	ws, us = weighted.sum(), len(unweighted)
 	loss_weights = ((1-alpha) * weighted / ws + alpha * unweighted / us) * (ws + us)
 
-	if train.with_analysis:
+	if analysis is not None:
 		train.tt.profile("ADI analysis")
-		train.analysis.ADI(values)
+		analysis.ADI(values)
 		train.tt.end_profile()
 	return oh_states, value_targets, torch.from_numpy(loss_weights).float()
 

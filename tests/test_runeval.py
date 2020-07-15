@@ -13,8 +13,7 @@ class TestRuneval(MainTest):
 		run_path = os.path.join( os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  'runeval.py' )
 		location = 'local_tests/eval'
 
-		run_settings = {'location': location, 'agent': 'BFS', 'games': 2, 'max_time': 1, 'scrambling': '2 4',
-				'mcts_c': 0.6123, 'mcts_graph_search': False, 'policy_sample': True}
+		run_settings = { 'location': location, 'agent': 'BFS', 'games': 2, 'max_time': 1, 'scrambling': '2 4' }
 		args = [sys.executable, run_path,]
 		for k, v in run_settings.items(): args.extend([f'--{k}', str(v)])
 		subprocess.check_call(args)  # Raises error on problems in call
