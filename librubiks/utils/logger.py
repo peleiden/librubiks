@@ -62,6 +62,11 @@ class Logger:
 		self.log()
 		self.log(title)
 
+	def throw(self, error: Exception, with_timestamp=True):
+		self.log(error, with_timestamp=with_timestamp)
+		raise error
+
+
 class NullLogger(Logger):
 
 	_verbose = False
