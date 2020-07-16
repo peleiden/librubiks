@@ -238,7 +238,8 @@ class _Cube(Environment, ABC):
 			tensor_state[i + 8] = get_side_pos(solved_state.sides[i], solved_state.side_orientations[i])
 		return tensor_state
 
-	def _face_dir(self, actions):
+	@staticmethod
+	def _face_dir(actions):
 		"""
 		Converts one or more actions to legacy type actions, that is face 0-5 and direction (0 for negative, 1 for positive)
 		"""
@@ -290,7 +291,6 @@ class _Cube2024(_Cube):
 			# Inserts values for corner i in position pos
 			pos = state[i] // 3
 			orientation = state[i] % 3
-			# Mapping should probably be smarter
 			# For these corners, "right turn" order is 0 2 1 instead of 0 1 2, so orientation is messed up without this fix
 			if pos in [0, 2, 5, 7]:
 				orientation *= -1
@@ -403,6 +403,6 @@ environments = {
 }
 
 
-def get_env(env: str) -> Environment:
-	assert env in environments, f"Environment must be one of " + ", ".join(environments.keys()) + f", not {env}"
-	return environments[env](env)
+def get_env(env_key: str) -> Environment:
+	assert env_key in environments, f"Environment must be one of " + ", ".join(environments.keys()) + f", not {env_key}"
+	return environments[env_key](env_key)

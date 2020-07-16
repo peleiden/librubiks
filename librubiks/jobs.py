@@ -1,6 +1,7 @@
 import sys, os
 from shutil import rmtree
 from glob import glob as glob  # glob
+from typing import List
 
 import json
 
@@ -13,7 +14,7 @@ from librubiks.utils import get_commit, Logger
 from librubiks.model import Model, ModelConfig, create_net, save_net, load_net
 from librubiks.train import Train
 
-from librubiks.solving import agents
+from librubiks.solving import agents as ag
 from librubiks.solving.agents import ValueSearch, DeepAgent, Agent
 from librubiks.solving.evaluation import Evaluator, EvalData
 
@@ -158,14 +159,15 @@ class EvalJob:
 		name: str,
 		location: str,
 		use_best: bool,
-		agent: str,
+		env_key: str,
+		agents: List[str],
 		games: int,
 		max_time: float,
 		max_states: int,
 		scrambling: str,
 		optimized_params: bool,
-		astar_lambda: float,
-		astar_expansions: int,
+		astar_lambdas: List[float],
+		astar_expansions: List[int],
 
 		# Currently not set by parser
 		in_subfolder: bool,  # Should be true if there are multiple experiments
@@ -173,6 +175,7 @@ class EvalJob:
 
 		self.name = name
 		self.location = location
+		self.env = envs.get_env(env_key)
 
 		assert isinstance(games, int) and games
 		assert max_time >= 0
@@ -184,87 +187,69 @@ class EvalJob:
 		# Create evaluator
 		self.log = Logger(f"{self.location}/{self.name}.log", name)  # Already creates logger at init to test whether path works
 		self.evaluator = Evaluator(n_games=games, max_time=max_time, max_states=max_states, scrambling_depths=scrambling, logger=self.log)
+		self.log("Collecting agents")
 
 		# Create agents
-		agent_string = agent
-		agent = getattr(agents, agent_string)
-		assert issubclass(agent, agents.Agent)
+		astar_lambdas = iter(astar_lambdas)
+		astar_expansions = iter(astar_expansions)
+		self.agents = list()  # List of all agents that will be evaluated
+		for agent_str in agents:
+			agent = getattr(ag, agent_str)
+			assert issubclass(agent, ag.Agent) and not agent == ag.Agent and not agent == ag.DeepAgent,\
+				f"Agent must be a subclass of agents.Agent or agents.DeepAgent, but {agent_str} was given"
 
-		if issubclass(agent, agents.DeepAgent):
-			self.agents, self.reps, agents_args = {}, {}, {}
+			if issubclass(agent, ag.DeepAgent):
+				self.agents, agent_args = {}, {}
 
-			# DeepAgents need specific arguments
-			if agent == agents.AStar:
-				assert isinstance(astar_lambda, float) and 0 <= astar_lambda <= 1, "AStar lambda must be float in [0, 1]"
-				assert isinstance(astar_expansions, int) and astar_expansions >= 1 and (not max_states or astar_expansions < max_states) , "Expansions must be int < max states"
-				agents_args = { 'lambda_': astar_lambda, 'expansions': astar_expansions }
-			else:  # Non-parametric methods go brrrr
-				agents_args = {}
+				# Some DeepAgents need specific arguments
+				if agent == ag.AStar:
+					astar_lambda, astar_expansion = next(astar_lambdas), next(astar_expansions)
+					assert isinstance(astar_lambda, float) and 0 <= astar_lambda <= 1, "AStar lambda must be float in [0, 1]"
+					assert isinstance(astar_expansion, int) and astar_expansion >= 1 and (not max_states or astar_expansion < max_states),\
+						"Expansions must be int < max states"
+					agent_args = { 'lambda_': astar_lambda, 'expansions': astar_expansion }
+				else:  # Non-parametric methods go brrrr
+					agent_args = {}
 
-			search_location = os.path.dirname(os.path.abspath(self.location)) if in_subfolder else self.location # Use parent folder, if parser has generated multiple folders
-			# DeepAgent might have to test multiple NN's
-			for folder in glob(f"{search_location}/*/") + [search_location]:
-				if not os.path.isfile(os.path.join(folder, 'model.pt')):
-					continue
-				with open(f"{folder}/config.json") as f:
-					cfg = json.load(f)
-				if optimized_params and agent in [agents.AStar]:
-					parampath = os.path.join(folder, f'{agent_string}_params.json')
-					if os.path.isfile(parampath):
-						with open(parampath, 'r') as paramfile:
-							agents_args = json.load(paramfile)
+				# Use parent folder, if parser has generated multiple folders
+				search_location = os.path.dirname(os.path.abspath(self.location)) if in_subfolder else self.location
+				# DeepAgent might have to test multiple NN's
+				for folder in glob(f"{search_location}/*/") + [search_location]:
+					if not os.path.isfile(os.path.join(folder, 'model.pt')):
+						continue
+					if optimized_params and agent in [ag.AStar]:
+						parampath = os.path.join(folder, f'{agent_str}_params.json')
+						if os.path.isfile(parampath):
+							with open(parampath, 'r') as paramfile:
+								agents_args = json.load(paramfile)
+						else:
+							self.log.throw(FileNotFoundError(
+								f"Optimized params was set to true, but no file {parampath} was found, proceding with arguments for this {agent_str}."
+							))
+					a = agent.from_saved(folder, use_best=use_best, **agent_args)
+					if a.env.__class__ == self.env.__class__:
+						if in_subfolder and len(agents) > 1:  # Add distinguishing names to agents
+							a.name += f" - {a.net}"
+						agents.append(a)
+						self.log(f"Added agent '{a}' to agent list")
 					else:
-						self.log(f"Optimized params was set to true, but no file {parampath} was found, proceding with arguments for this {agent_string}.")
+						self.log(f"Agent '{a}' was not added to list, as the network uses the {a.env} environment")
 
-				agent = agent.from_saved(folder, use_best=use_best, **agents_args)
-				key = f'{agent}{"" if folder == search_location else " " + os.path.basename(folder.rstrip(os.sep))}'
+				if not self.agents:
+					self.log.throw(FileNotFoundError(f"No model.pt found in folder or subfolder of {self.location}"))
 
-				self.reps[key] = cfg["is2024"]
-				self.agents[key] = agent
+			else:
+				self.agents.append(agent(self.env))
+				self.log(f"Added agent '{self.agents[-1]}' to agent list")
 
-			if not self.agents:
-				raise FileNotFoundError(f"No model.pt found in folder or subfolder of {self.location}")
-			self.log(f"Loaded model from {search_location}")
-
-		else:
-			agent = agent()
-			self.agents = { str(agent): agent }
-			self.reps   = { str(agent): True  }
-
-		self.agent_results = {}
-		self.log(f"Initialized {self.name} with agents {', '.join(str(s) for s in self.agents)}")
-		self.log(f"TIME ESTIMATE: {len(self.agents) * self.evaluator.approximate_time() / 60:.2f} min.\t(Rough upper bound)")
+			self.log(f"Initialized {self.name} with agents " + '\n'.join(str(s) for s in self.agents) + "\nEnvironment: {self.env}")
+			self.log(f"Time estimate: {len(self.agents) * self.evaluator.approximate_time() / 60:.2f} min. (Rough upper bound)")
 
 	def execute(self):
 		self.log(f"Beginning evaluator {self.name}\nLocation {self.location}\nCommit: {get_commit()}")
-		for name, agent in self.agents.items():
-			self.log.section(f'Evaluationg agent {name}')
+		for agent in self.agents:
+			self.log.section(f'Evaluationg agent {agent}')
 			evaldata = self.evaluator.eval(agent)
 			subfolder = os.path.join(self.location, "evaluation_results")
 			paths = evaldata.save(subfolder)
 			self.log("Saved evaluation results to\n\t" + "\n\t".join(paths))
-
-	@staticmethod
-	def plot_all_jobs(jobs: list, save_location: str):
-		results, states, times, settings = dict(), dict(), dict(), dict()
-		export_settings = dict()
-		for job in jobs:
-			for agent, (result, states_, times_) in job.agent_results.items():
-				key = agent if len(jobs) == 1 else f"{job.name} - {agent}"
-				results[key] = result
-				states[key] = states_
-				times[key] = times_
-				settings[key] = {
-					"n_games": job.evaluator.n_games,
-					"max_time": job.evaluator.max_time,
-					"max_states": job.evaluator.max_states,
-					"scrambling_depths": job.evaluator.scrambling_depths,
-				}
-				export_settings[key] = { **settings[key], "scrambling_depths": job.evaluator.scrambling_depths.tolist() }
-		eval_settings_path = os.path.join(save_location, "eval_settings.json")
-		with open(eval_settings_path, "w", encoding="utf-8") as f:
-			json.dump(export_settings, f, indent=4)
-		savepaths = Evaluator.plot_evaluators(results, states, times, settings, save_location)
-		joinedpaths = "\n".join(savepaths)
-		job.log(f"Saved settings to {eval_settings_path} and plots to\n{joinedpaths}")
-

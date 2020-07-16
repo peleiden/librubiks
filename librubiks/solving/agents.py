@@ -10,6 +10,8 @@ from librubiks.model import Model, load_net
 
 
 class Agent(ABC):
+	name: str
+
 	eps = np.finfo("float").eps
 	_explored_states = 0
 
@@ -56,7 +58,8 @@ class Agent(ABC):
 		return time_limit, max_states
 
 	def __str__(self):
-		raise NotImplementedError
+		assert self.name, "Agent name must not be empty"
+		return self.name
 
 	def __len__(self):
 		# Returns number of states explored
@@ -64,6 +67,7 @@ class Agent(ABC):
 
 
 class DeepAgent(Agent, ABC):
+
 	def __init__(self, net: Model):
 		super().__init__(None)
 		self.net = net
@@ -94,7 +98,7 @@ class RandomSearch(Agent):
 
 
 class BFS(Agent):
-
+	name = "Breadth-first search"
 	states = dict()
 
 	def search(self, state: np.ndarray, time_limit: float = None, max_states: int = None) -> (np.ndarray, bool):
@@ -128,14 +132,12 @@ class BFS(Agent):
 
 		return False
 
-	def __str__(self):
-		return "Breadth-first search"
-
 	def __len__(self):
 		return len(self.states)
 
 
 class ValueSearch(DeepAgent):
+	name = "Greedy value"
 
 	def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
 		substates = self.env.multi_act(self.env.repeat_state(state, self.env.action_dim), self.env.iter_actions())
@@ -148,9 +150,6 @@ class ValueSearch(DeepAgent):
 			v = self.net(substates_oh).squeeze().cpu().numpy()
 			action = np.argmax(v)
 			return action, substates[action], False, self.env.action_dim
-
-	def __str__(self):
-		return "Greedy value"
 
 
 class AStar(DeepAgent):
@@ -201,6 +200,7 @@ class AStar(DeepAgent):
 		super().__init__(net)
 		self.lambda_ = lambda_
 		self.expansions = expansions
+		self.name = f"AStar (lambda={self.lambda_}, N={self.expansions})"
 
 	@no_grad
 	def search(self, state: np.ndarray, time_limit: float = None, max_states: int = None) -> bool:
@@ -394,6 +394,3 @@ class AStar(DeepAgent):
 
 	def __len__(self) -> int:
 		return len(self.indices)
-
-	def __str__(self) -> str:
-		return f'AStar (lambda={self.lambda_}, N={self.expansions})'

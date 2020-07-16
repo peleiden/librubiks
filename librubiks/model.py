@@ -125,6 +125,12 @@ class Model(nn.Module, ABC):
 	def get_params(self) -> torch.tensor:
 		return torch.cat([x.float().flatten() for x in self.state_dict().values()]).clone()
 
+	def __len__(self):
+		return sum(x.numel() for x in self.state_dict().values())
+
+	def __str__(self):
+		raise NotImplementedError
+
 
 class _FullyConnected(Model):
 	"""
@@ -134,6 +140,10 @@ class _FullyConnected(Model):
 		layer_sizes = [self.env.oh_size, *self.config.layer_sizes, 1]
 		layers = self._create_fc_layers(layer_sizes)
 		self.layers = nn.Sequential(*layers)
+
+	def __str__(self):
+		return "FC " + ", ".join(self.config.layer_sizes)
+
 
 class _NonConvResBlock(nn.Module):
 	"""
@@ -166,18 +176,17 @@ class _NonConvResBlock(nn.Module):
 
 class _ResNet(Model):
 	"""
-	A Linear Residual Neural Network.
+	A fully-connected network with residual blocks
 	"""
-	#				    /-> policy fc layer(s)
-	#  x-> fc layers -> residual blocks
-	#				    \-> value fc layer(s)
 	def _construct_net(self):
 		# FIXME: This is currently broken
 		# TODO: Better implementation of res blocks, so they can have different sizes
-
 		for i in range(self.config.res_blocks):
 			resblock = _NonConvResBlock(self.config.res_size, self.config.activation_function, self.config.batchnorm)
 			self.shared_net.add_module(f'resblock{i}', resblock)
+
+	def __str__(self):
+		return "Res " + ", ".join(self.config.layer_sizes)
 
 
 def create_net(config: ModelConfig, logger = NullLogger()) -> Model:

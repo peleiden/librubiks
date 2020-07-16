@@ -5,7 +5,7 @@ from ast import literal_eval
 from librubiks.utils import Parser, set_seeds
 from librubiks.jobs import EvalJob
 
-train_folders = sorted(glob('data/local_train2*')) #Stops working in the next millenium
+train_folders = sorted(glob('data/local_train2*'))  # Stops working in the next millenium
 
 ###
 # Should correspond to arguments in EvalJob
@@ -22,10 +22,10 @@ options = {
 		'type':     lambda arg: arg.split(),
 	},
 	'scrambling': {
-		'default':  100,
+		'default':  'deep',
 		'help':     'The scrambling depths at which to test the model. Can be given as a singel integer for one depth or\n'
-					'Two space-seperated integers (given in string delimeters such as --eval_scrambling "10 25")',
-		# Ugly way to define list of two numbers or single number input or 'deep', such that type('deep') = 0
+					'Two space-seperated integers (given in string delimeters such as --scrambling "10 25")',
+		# Ugly way to define list of two numbers or single number input or 'deep'
 		'type':     lambda args: ([int(args.split()[0]), int(args.split()[1])] if len(args.split()) > 1 else [int(args), int(args)+1]) if args != 'deep' else [0],
 	},
 	'games': {
@@ -39,8 +39,9 @@ options = {
 		'type':     float,
 	},
 	'max_states': {
-		'default':  175_000,
-		'help':     'Max number of searched states for agent per configuration. 0 for unlimited. Evaluation is terminated when either max_time or max_states is reached.',
+		'default':  200_000,
+		'help':     'Max number of searched states for agent per configuration. 0 for unlimited. '
+					'Evaluation is terminated when either max_time or max_states is reached.',
 		'type':     lambda arg: int(float(arg)),
 	},
 	'use_best': {
@@ -49,27 +50,30 @@ options = {
 		'type':     literal_eval,
 		'choices':  [True, False],
 	},
-	'optimized_params' : {
+	'optimized_params': {
 		'default':  False,
-		'help':     "Set to True to overwrite agent params with the ones in corresponding JSON created by hyper_optim, if it exists.",
+		'help':     'Set to True to overwrite agent params with the ones in corresponding JSON created by hyper_optim, if it exists. '
+					'If True, there must only be one agent given.',
 		'type':     literal_eval,
 		'choices':  [True, False],
 	},
-	'astar_lambda' : {
-		'default':  0.2,
-		'help':     'The A* search lambda parameter: How much to weight the distance from start to nodes in cost calculation',
-		'type':     float,
+	'astar_lambdas': {
+		'default':  '0.2',
+		'help':     'The A* search lambda parameter: How much to weight the distance from start to nodes in cost calculation. '
+					'There must be as many space seperated values as there are AStar agents given.',
+		'type':     lambda args: [float(x) for x in args.split()],
 	},
-	'astar_expansions' : {
-		'default':  100,
-		'help':     'The A* expansions parameter: How many nodes to expand to at a time. Can be thought of as a batch size: Higher is much faster but lower should be a bit more precise.',
-		'type':     int,
+	'astar_expansions': {
+		'default':  '100',
+		'help':     'The A* expansions parameter: How many nodes to expand to at a time. Can be thought of as a batch size: '
+					'Higher is much faster but lower should be a bit more precise. '
+					'There must be as many space seperated values as there are AStar agents given.',
+		'type':     lambda args: [int(x) for x in args.split()],
 	},
 }
 
 if __name__ == "__main__":
 	description = r"""
-
 ___________________________________________________________________
   /_/_/_/\  ______ _      ______ _   _______ _____ _   __ _____
  /_/_/_/\/\ | ___ \ |     | ___ \ | | | ___ \_   _| | / //  ___|
