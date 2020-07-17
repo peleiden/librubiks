@@ -3,6 +3,7 @@ import json
 import os
 from time import time
 from copy import deepcopy
+from pprint import pformat
 
 import torch
 import torch.nn as nn
@@ -21,16 +22,17 @@ class ModelConfig:
 		"lrelu": nn.LeakyReLU(),
 	}
 
-	def __init__(self,
-				 env_key: str,
-				 layer_sizes: list   = [4096, 2048, 512],
-				 activation_function = "elu",
-				 batchnorm: bool     = True,
-				 dropout: float      = 0,
-				 architecture: str   = "fc",
-				 init: str           = "glorot",
-				 id: int             = None
-			):
+	def __init__(
+		self,
+		env_key: str,
+		layer_sizes: list   = [4096, 2048, 512],
+		activation_function = "elu",
+		batchnorm: bool     = True,
+		dropout: float      = 0,
+		architecture: str   = "fc",
+		init: str           = "glorot",
+		id: int            = None
+	):
 		assert type(layer_sizes) == list,\
 			f"Layers must be a list of integer sizes, not {type(layer_sizes)}"
 		assert activation_function in self.activation_functions.keys(),\
@@ -51,7 +53,6 @@ class ModelConfig:
 		self.architecture = architecture
 		self.dropout = dropout
 		self.init = init
-
 		self.id = id or hash(time())
 	
 	def get_af(self):
@@ -63,6 +64,9 @@ class ModelConfig:
 	@classmethod
 	def from_json_dict(cls, conf: dict):
 		return ModelConfig(**conf)
+
+	def __str__(self):
+		return pformat(self.__dict__)
 
 
 class Model(nn.Module, ABC):
@@ -128,9 +132,6 @@ class Model(nn.Module, ABC):
 	def __len__(self):
 		return sum(x.numel() for x in self.state_dict().values())
 
-	def __str__(self):
-		raise NotImplementedError
-
 
 class _FullyConnected(Model):
 	"""
@@ -140,9 +141,6 @@ class _FullyConnected(Model):
 		layer_sizes = [self.env.oh_size, *self.config.layer_sizes, 1]
 		layers = self._create_fc_layers(layer_sizes)
 		self.layers = nn.Sequential(*layers)
-
-	def __str__(self):
-		return "FC " + ", ".join(self.config.layer_sizes)
 
 
 class _NonConvResBlock(nn.Module):
@@ -185,18 +183,16 @@ class _ResNet(Model):
 			resblock = _NonConvResBlock(self.config.res_size, self.config.activation_function, self.config.batchnorm)
 			self.shared_net.add_module(f'resblock{i}', resblock)
 
-	def __str__(self):
-		return "Res " + ", ".join(self.config.layer_sizes)
-
 
 def create_net(config: ModelConfig, logger = NullLogger()) -> Model:
 	"""
 	Allows this class to be used to instantiate other Network architectures based on the content
 	of the configuartion file.
 	"""
-	if config.architecture == "fc":  return _FullyConnected(config, logger).to(gpu)
-	if config.architecture == "res": return _ResNet(config, logger).to(gpu)
-
+	if config.architecture == "fc":
+		return _FullyConnected(config, logger).to(gpu)
+	if config.architecture == "res":
+		return _ResNet(config, logger).to(gpu)
 	raise KeyError(f"Network architecture should be 'fc' or 'res', but '{config.architecture}' was given")
 
 

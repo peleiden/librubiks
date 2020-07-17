@@ -404,5 +404,5 @@ environments = {
 
 
 def get_env(env_key: str) -> Environment:
-	assert env_key in environments, f"Environment must be one of " + ", ".join(environments.keys()) + f", not {env_key}"
+	assert env_key in environments, f"Environment must be one of " + ", ".join(environments.keys()) + f", but {env_key} was given"
 	return environments[env_key](env_key)

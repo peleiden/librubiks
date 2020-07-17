@@ -303,11 +303,11 @@ class AStar(DeepAgent):
 			heapq.heappush(self.open_queue, (cost, new_states_idcs[i]))
 		self.tt.end_profile("Update new state values")
 
-		self.tt.profile("Check whether won")
+		self.tt.profile("Check if solved")
 		solved_substates = self.env.multi_is_solved(new_states)
+		self.tt.end_profile("Check if solved")
 		if solved_substates.any():
 			return True
-		self.tt.end_profile("Check whether won")
 
 		self.tt.profile("Old states: Update parents and G")
 		seen_batch_idcs = np.where(first_seen)  # Old idcs corresponding to first_seen
@@ -373,7 +373,7 @@ class AStar(DeepAgent):
 
 		self.open_queue     = list()
 		self.indices        = dict()
-		self.states         = np.empty((self._stack_expand, *self.env.shape()), dtype=self.env.dtype)
+		self.states         = np.empty((self._stack_expand, *self.env.shape), dtype=self.env.dtype)
 		self.parents        = np.empty(self._stack_expand, dtype=int)
 		self.parent_actions = np.zeros(self._stack_expand, dtype=int)
 		self.G              = np.empty(self._stack_expand)
@@ -382,7 +382,7 @@ class AStar(DeepAgent):
 	def increase_stack_size(self):
 		expand_size    = len(self.states)
 
-		self.states	        = np.concatenate([self.states, np.empty((expand_size, *self.env.shape()), dtype=self.env.dtype)])
+		self.states	        = np.concatenate([self.states, np.empty((expand_size, *self.env.shape), dtype=self.env.dtype)])
 		self.parents        = np.concatenate([self.parents, np.zeros(expand_size, dtype=int)])
 		self.parent_actions = np.concatenate([self.parent_actions, np.zeros(expand_size, dtype=int)])
 		self.G              = np.concatenate([self.G, np.empty(expand_size)])

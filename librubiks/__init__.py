@@ -47,7 +47,7 @@ class DataStorage:
 		# Save data
 		paths = [os.path.join(loc, self.json_name)]
 		with open(paths[0], "w", encoding="utf-8") as f:
-			json.dump(to_json, f)
+			json.dump(to_json, f, indent=4)
 		for key, arr in to_npy.items():
 			paths.append(os.path.join(loc, f"{key}.npy"))
 			np.save(paths[-1], arr)

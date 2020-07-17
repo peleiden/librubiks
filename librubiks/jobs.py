@@ -1,5 +1,6 @@
 import sys, os
 from shutil import rmtree
+from collections import Counter
 from glob import glob as glob  # glob
 from typing import List
 
@@ -199,7 +200,6 @@ class EvalJob:
 				f"Agent must be a subclass of agents.Agent or agents.DeepAgent, but {agent_str} was given"
 
 			if issubclass(agent, ag.DeepAgent):
-				self.agents, agent_args = {}, {}
 
 				# Some DeepAgents need specific arguments
 				if agent == ag.AStar:
@@ -221,23 +221,24 @@ class EvalJob:
 						parampath = os.path.join(folder, f'{agent_str}_params.json')
 						if os.path.isfile(parampath):
 							with open(parampath, 'r') as paramfile:
-								agents_args = json.load(paramfile)
+								agent_args = json.load(paramfile)
 						else:
 							self.log.throw(FileNotFoundError(
 								f"Optimized params was set to true, but no file {parampath} was found, proceding with arguments for this {agent_str}."
 							))
 					a = agent.from_saved(folder, use_best=use_best, **agent_args)
 					if a.env.__class__ == self.env.__class__:
-						if in_subfolder and len(agents) > 1:  # Add distinguishing names to agents
-							a.name += f" - {a.net}"
-						agents.append(a)
+						self.agents.append(a)
 						self.log(f"Added agent '{a}' to agent list")
 					else:
 						self.log(f"Agent '{a}' was not added to list, as the network uses the {a.env} environment")
 
-				if not self.agents:
-					self.log.throw(FileNotFoundError(f"No model.pt found in folder or subfolder of {self.location}"))
-
+				# Handl agents with the same name
+				# TODO Better way to uniquely identify searchers than layer sizes - perhaps name parameter?
+				counts = Counter([agent.name for agent in self.agents])
+				for agent in self.agents:
+					if counts[agent.name] > 1:
+						agent.name += " - " + ", ".join([str(x) for x in agent.net.config.layer_sizes])
 			else:
 				self.agents.append(agent(self.env))
 				self.log(f"Added agent '{self.agents[-1]}' to agent list")
@@ -247,9 +248,7 @@ class EvalJob:
 
 	def execute(self):
 		self.log(f"Beginning evaluator {self.name}\nLocation {self.location}\nCommit: {get_commit()}")
-		for agent in self.agents:
-			self.log.section(f'Evaluationg agent {agent}')
-			evaldata = self.evaluator.eval(agent)
-			subfolder = os.path.join(self.location, "evaluation_results")
-			paths = evaldata.save(subfolder)
-			self.log("Saved evaluation results to\n\t" + "\n\t".join(paths))
+		evaldata = self.evaluator.eval(self.agents)
+		subfolder = os.path.join(self.location, "evaluation_results")
+		paths = evaldata.save(subfolder)
+		self.log("Saved evaluation results to\n\t" + "\n\t".join(paths))

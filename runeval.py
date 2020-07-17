@@ -1,4 +1,4 @@
-from glob import glob as glob #glob
+from glob import glob as glob  # glob
 
 from ast import literal_eval
 
@@ -13,12 +13,12 @@ train_folders = sorted(glob('data/local_train2*'))  # Stops working in the next 
 options = {
 	'location': {
 		'default':  train_folders[-1] if train_folders else '.',
-		'help':     "Location to search for model and save results.\nMust use location/<run_name>/model.pt structure.",
+		'help':     'Location to search for model and save results.\nMust use location/<run_name>/model.pt structure.',
 		'type':     str,
 	},
 	'agents': {
 		'default':  'AStar',
-		'help':     'One or more space seperated agents corresponding to agent classes in librubiks.solving.agents',
+		'help':     'One or more space seperated agents corresponding to agent classes in librubiks.solving.agents.',
 		'type':     lambda arg: arg.split(),
 	},
 	'scrambling': {

@@ -80,7 +80,7 @@ class Evaluator:
 		states_explored = []
 		time_used = []
 		for agent in agents:
-			self.log.section(f"Evaluation of {agent}")
+			self.log.section(f"Evaluating {agent}")
 			self.log("\n".join([
 				f"{self.n_games * len(self.scrambling_depths)} cubes",
 				f"Maximum solve time per cube is {TickTock.stringify_time(self.max_time, TimeUnit.second)} "
