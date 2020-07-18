@@ -17,7 +17,7 @@ class Profile:
 		self.hits: List[float] = []
 		self.name = name
 		self.depth = depth
-	
+
 	def get_hits(self):
 		return self.hits
 
@@ -28,13 +28,13 @@ class Profile:
 	def mean(self):
 		# Returns mean runtime lengths
 		return self.sum() / len(self) if self.get_hits() else 0
-	
+
 	def std(self):
 		# Returns empirical standard deviation of runtime
 		# Be aware that this is highly sensitive to outliers and often a bad estimate
 		s = self.mean()
 		return (1 / (len(self)+1) * sum(map(lambda x: (x-s)**2, self.get_hits()))) ** 0.5
-	
+
 	def remove_outliers(self, threshold=2):
 		# Remove all hits larger than threshold * average
 		# Returns number of removed outliers
@@ -42,7 +42,7 @@ class Profile:
 		original_length = len(self)
 		self.hits = [x for x in self.hits if x <= threshold * mu]
 		return original_length - len(self)
-	
+
 	def __str__(self):
 		return self.name
 
@@ -78,7 +78,7 @@ class TickTock:
 		if name is not None:
 			assert name == profile.name, f"Expected to pop profile '{profile.name}', received '{name}'"
 		return dt
-	
+
 	def fuse(self, tt):
 		"""Fuses a TickTock instance into self"""
 		for profile in tt.profiles.values():

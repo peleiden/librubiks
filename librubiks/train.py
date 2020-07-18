@@ -41,7 +41,7 @@ class BatchFeedForward:
 		self.log = logger
 		self.batches = initial_batches
 		self.increase_factor = increase_factor
-	
+
 	@no_grad
 	def forward(self, x: torch.tensor) -> torch.tensor:
 		while True:
@@ -56,10 +56,10 @@ class BatchFeedForward:
 								 f"{self.batches} to {self.batches*self.increase_factor}")
 				self._increase()
 		return output
-	
+
 	def update_net(self, net: Model):
 		self.net = net
-	
+
 	def __call__(self, x: torch.tensor) -> torch.tensor:
 		return self.forward(x)
 
@@ -334,7 +334,7 @@ class Train:
 				evaluation_rollouts = np.append(evaluation_rollouts, self.rollouts-1)
 		else:
 			evaluation_rollouts = np.array([])
-		
+
 		return evaluation_rollouts
 
 
@@ -351,6 +351,7 @@ def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float, analysis: Tr
 		- policy_targets and value_targets contains optimal value and policy targets for each training point
 		- loss_weights contains the weight for each training point (see weighted samples subsection of McAleer et al paper)
 	"""
+	#TODO: Convert `train` use to using the arguments with relevant data
 
 	train.tt.profile("Scrambling")
 	# Only include solved state in training if using Max Lapan convergence fix

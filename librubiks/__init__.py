@@ -43,7 +43,7 @@ class DataStorage:
 				to_npy.update({key: data})
 			else:
 				to_json.update({key: data})
-		
+
 		# Save data
 		paths = [os.path.join(loc, self.json_name)]
 		with open(paths[0], "w", encoding="utf-8") as f:
@@ -52,7 +52,7 @@ class DataStorage:
 			paths.append(os.path.join(loc, f"{key}.npy"))
 			np.save(paths[-1], arr)
 		return paths
-	
+
 	@classmethod
 	def load(cls, loc: str):
 		loc = cls._get_loc(loc)
@@ -65,9 +65,9 @@ class DataStorage:
 		for key, field in cls.__dict__["__dataclass_fields__"].items():
 			if field.type == np.ndarray:
 				npys[key] = np.load(os.path.join(loc, f"{key}.npy"))
-		
+
 		return cls(**non_numpy, **npys)
-	
+
 	@classmethod
 	def _get_loc(cls, loc: str):
 		return os.path.join(loc, cls.subfolder) if cls.subfolder else loc

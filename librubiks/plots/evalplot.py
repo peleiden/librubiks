@@ -54,7 +54,7 @@ class EvalPlot:
 			save_paths.extend(p)
 
 		return save_paths
-	
+
 	@classmethod
 	def _plot_depth_win(cls, eval_results: dict, save_dir: str, eval_settings: dict, colours: list, title: str='') -> str:
 		# depth, win%-graph
@@ -162,9 +162,9 @@ class EvalPlot:
 		path = os.path.join(save_dir, "time_winrate.png" if is_times else "states_winrate.png")
 		plt.savefig(path)
 		plt.clf()
-		
+
 		return path
-		
+
 	@classmethod
 	def _distribution_plots(cls, eval_results: dict, eval_times: dict, eval_states: dict, depth: int,
 	                        save_dir: str, eval_settings: dict, colours: list) -> str:

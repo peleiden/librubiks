@@ -25,13 +25,13 @@ class ModelConfig:
 	def __init__(
 		self,
 		env_key: str,
-		layer_sizes: list   = [4096, 2048, 512],
+		layer_sizes: list   = (4096, 2048, 512),
 		activation_function = "elu",
 		batchnorm: bool     = True,
 		dropout: float      = 0,
 		architecture: str   = "fc",
 		init: str           = "glorot",
-		id: int            = None
+		id: int             = None
 	):
 		assert type(layer_sizes) == list,\
 			f"Layers must be a list of integer sizes, not {type(layer_sizes)}"
@@ -54,8 +54,8 @@ class ModelConfig:
 		self.dropout = dropout
 		self.init = init
 		self.id = id or hash(time())
-	
-	def get_af(self):
+
+	def get_activfunc(self):
 		return self.activation_functions[self.activation_function]
 
 	def as_json_dict(self):
@@ -90,7 +90,7 @@ class Model(nn.Module, ABC):
 		"""Constructs self.layers based on self.config"""
 		raise NotImplementedError
 
-	def forward(self, x: torch.tensor) -> torch.tensor:
+	def forward(self, x: torch.Tensor) -> torch.Tensor:
 		x = self.layers(x)
 		return x
 
@@ -110,7 +110,7 @@ class Model(nn.Module, ABC):
 			layers.append(l)
 
 			if i != len(thiccness) - 2:
-				layers.append(self.config.get_af())
+				layers.append(self.config.get_activfunc())
 				if self.config.batchnorm:
 					layers.append(nn.BatchNorm1d(thiccness[i+1]))
 				if self.config.dropout > 0:
@@ -126,7 +126,7 @@ class Model(nn.Module, ABC):
 		new_net.load_state_dict(new_state_dict)
 		return new_net
 
-	def get_params(self) -> torch.tensor:
+	def get_params(self) -> torch.Tensor:
 		return torch.cat([x.float().flatten() for x in self.state_dict().values()]).clone()
 
 	def __len__(self):
@@ -157,7 +157,7 @@ class _NonConvResBlock(nn.Module):
 			self.batchnorm1 = nn.BatchNorm1d(layer_size)
 			self.batchnorm2 = nn.BatchNorm1d(layer_size)
 
-	def forward(self, x):
+	def forward(self, x: torch.Tensor) -> torch.Tensor:
 		residual = x
 		# Layer 1
 		x = self.layer1(x)

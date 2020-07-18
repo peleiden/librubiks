@@ -54,7 +54,7 @@ class TrainJob:
 
 		self.name = name
 		assert isinstance(self.name, str)
-		
+
 		self.env = envs.get_env(env_key)
 
 		self.rollouts = rollouts
@@ -191,6 +191,7 @@ class EvalJob:
 		self.log("Collecting agents")
 
 		# Create agents
+		#TODO: If one lambda or expansion is given, this should apply to all
 		astar_lambdas = iter(astar_lambdas)
 		astar_expansions = iter(astar_expansions)
 		self.agents = list()  # List of all agents that will be evaluated
