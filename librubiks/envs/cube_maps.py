@@ -107,10 +107,8 @@ def get_side_pos(pos: int, orientation: int) -> int:
 def get_tensor_map(dtype) -> np.ndarray:
 	"""
 	Returns a 12 x 2 x 24 mapping tensor
-	Each is a six long list containg 2x24 mapping tensors
-	Order is F, B, T, D, L, R
-	Row one for corners [:8] and row two for sides [8:]
-	Value at index i in a mapping should be added to i in state representation
+	Axis 0 for action, axis 1 for side/corner, and axis 2 for state
+	A lookup gives the new value for a cubie
 	"""
 	actions = [Actions.F, Actions.B, Actions.T, Actions.D, Actions.L, Actions.R]
 	map_pos = list()
