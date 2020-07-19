@@ -13,7 +13,8 @@ from librubiks import envs
 from librubiks.utils import get_commit, Logger
 
 from librubiks.model import Model, ModelConfig, create_net, save_net, load_net
-from librubiks.train import Train
+from librubiks.train import Train, TrainData
+from librubiks.analysis import AnalysisData
 
 from librubiks.solving import agents as ag
 from librubiks.solving.agents import ValueSearch, DeepAgent, Agent

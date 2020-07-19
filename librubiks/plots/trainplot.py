@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.colors as mcolour
 import matplotlib.pyplot as plt
@@ -59,7 +60,6 @@ class TrainPlot:
 		title = (f"Training - {TickTock.thousand_seps(self.rollouts*self.rollout_games*self.rollout_depth)} states")
 		plt.title(title)
 		fig.tight_layout()
-		if semi_logy: plt.semilogy()
 		plt.grid(True)
 
 		os.makedirs(save_dir, exist_ok=True)
@@ -67,12 +67,11 @@ class TrainPlot:
 		plt.savefig(path)
 		self.log(f"Saved loss and evaluation plot to {path}")
 
-		if show: plt.show()
-		plt.clf()
+		plt.close()
 
 	# ANALYSIS PLOTS
 
-	def plot_substate_distributions(self, loc: str, show=False):
+	def plot_substate_distributions(self, loc: str):
 		# TODO: Remove policy from this plot
 		self.log("Making plot of policy entropy and ADI value stds")
 
@@ -101,8 +100,7 @@ class TrainPlot:
 
 		path = os.path.join(loc, "substate_dists.png")
 		plt.savefig(path)
-		if show: plt.show()
-		plt.clf()
+		plt.close()
 
 		self.log(f"Saved substate probability plot to {path}")
 
@@ -151,7 +149,7 @@ class TrainPlot:
 				image_from_plot = image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 				gif_frames.append(image_from_plot)
 
-				plt.clf()
+				plt.close()
 
 			if len(gif_frames) > 3: gif_frames.extend(gif_frames[-1] for i in range(10)) # Hacky way to pause gif at end
 			savepath = os.path.join(loc, "value_development.gif")
@@ -160,7 +158,7 @@ class TrainPlot:
 		elif not has_image_tools:
 			self.log(f"Visualizaiton of first state values could not be saved: Install imageio and networkx to do this")
 
-	def plot_value_targets(self, loc: str, show=False):
+	def plot_value_targets(self, loc: str):
 		if not len(self.evaluations): return
 		self.log("Plotting average value targets")
 		plt.figure(figsize=(19.2, 10.8))
@@ -179,11 +177,10 @@ class TrainPlot:
 		path = os.path.join(loc, "avg_target_values.png")
 		plt.grid(True)
 		plt.savefig(path)
-		if show: plt.show()
-		plt.clf()
+		plt.close()
 		self.log(f"Saved value target plot to {path}")
 
-	def plot_net_changes(self, loc: str, show=False):
+	def plot_net_changes(self, loc: str):
 		self.log("Plotting changes to network parameters")
 		plt.figure(figsize=(19.2, 10.8))
 		plt.plot(self.evaluations, np.cumsum(self.param_changes), label="Cumulative change in network parameters")
@@ -194,7 +191,6 @@ class TrainPlot:
 		plt.grid(True)
 		path = os.path.join(loc, "parameter_changes.png")
 		plt.savefig(path)
-		if show: plt.show()
-		plt.clf()
+		plt.close()
 		self.log(f"Saved network change plot to {path}")
 
