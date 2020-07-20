@@ -20,6 +20,9 @@ from librubiks.solving import agents as ag
 from librubiks.solving.agents import ValueSearch, DeepAgent, Agent
 from librubiks.solving.evaluation import Evaluator, EvalData
 
+import librubiks.plots.trainplot as tp
+import librubiks.plots.evalplot as ep
+
 
 class TrainJob:
 	eval_games = 200  # Not given as arguments to __init__, as they should be accessible in runtime_estim
@@ -254,3 +257,61 @@ class EvalJob:
 		subfolder = os.path.join(self.location, "evaluation_results")
 		paths = evaldata.save(subfolder)
 		self.log("Saved evaluation results to\n\t" + "\n\t".join(paths))
+
+
+class PlotJob:
+
+	def __init__(self, loc: str, train: bool, analysis: bool, eval_: bool):
+		self.loc = loc
+		self.train = train
+		self.analysis = analysis
+		self.eval = eval_
+	
+	def execute(self):
+		train_data, analysis_data, eval_data = self._get_data()
+		if train_data:
+			for loc, t_d in train_data.items():  # Make train_data iterable again!
+				tp.plot_training(loc, t_d)
+		if analysis_data:
+			for loc, a_d in analysis_data.items(loc, a_d):
+				tp.plot_net_changes(loc, a_d)
+				tp.plot_substate_distributions(loc, a_d)
+				tp.plot_value_targets(loc, a_d)
+				tp.visualize_first_states(loc, a_d)
+		if eval_data:
+			for loc, e_d in eval_data.items():
+				ep.plot_depth_win(loc, e_d)
+				ep.plot_sol_length_boxplots(loc, e_d)
+				ep.plot_time_states_winrate(loc, e_d)
+				ep.plot_distributions(loc, e_d)
+
+	def _get_data(self) -> (dict, dict, dict):
+		"""
+		Return three dicts (or None), the keys of which are locations and the values data
+		First for train, second for analysis, and third for evaluation
+		"""
+		
+		directories   = self._list_dirs(self.loc)
+		train_dirs    = self._filter_by_name(TrainData.subfolder, directories)
+		analysis_dirs = self._filter_by_name(AnalysisData.subfolder, directories)
+		eval_dirs     = self._filter_by_name(EvalData.subfolder, directories)
+
+		train_data    = { x: TrainData.load(x)    for x in train_dirs    } if self.train    else None
+		analysis_data = { x: AnalysisData.load(x) for x in analysis_dirs } if self.analysis else None
+		eval_data     = { x: EvalData.load(x)     for x in eval_dirs     } if self.eval     else None
+
+		return train_data, analysis_data, eval_data
+	
+	@staticmethod
+	def _list_dirs(loc: str) -> List[str]:
+		return [x[0] for x in os.walk(loc)]
+
+	@staticmethod
+	def _filter_by_name(name: str, directories: List[str]) -> List[str]:
+		"""Return parent folders of all directories with given name"""
+		dirs = list()
+		for directory in directories:
+			split = os.path.split(directory)
+			if name in split:
+				dirs.append(os.path.join(*split[:split.index(name)]))
+		return np.unique(dirs).tolist()
