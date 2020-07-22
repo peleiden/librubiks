@@ -15,6 +15,8 @@ unverbose = Unverbose()
 
 class Logger:
 
+	_default_sep = "\n"
+
 	def __init__(self, fpath: str, title: str, verbose=True):
 		dirs = "/".join(fpath.split('/')[:-1])
 		if not os.path.exists(dirs) and dirs:
@@ -28,15 +30,15 @@ class Logger:
 
 		self.log(title + "\n")
 
-	def __call__(self, *tolog, with_timestamp=True):
+	def __call__(self, *tolog, with_timestamp=True, sep=None):
 
-		self.log(*tolog, with_timestamp=with_timestamp)
+		self.log(*tolog, with_timestamp=with_timestamp, sep=sep)
 
-	def log(self, *tolog, with_timestamp=True):
-
+	def log(self, *tolog, with_timestamp=True, sep=None):
+		sep = sep or self._default_sep
 		time = get_timestamp()
 		with open(self.fpath, "a", encoding="utf-8") as logfile:
-			tolog = " ".join([str(x) for x in tolog])
+			tolog = sep.join([str(x) for x in tolog])
 			spaces = len(time) * " "
 			logs = tolog.split("\n")
 			if with_timestamp and tolog:
