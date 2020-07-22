@@ -1,6 +1,6 @@
 # Frontend
 
-<a href="https://peleiden.github.io/rl-rubiks">Demo page</a>
+<a href="https://peleiden.github.io/librubiks">Demo page</a>
 
 The frontend has two purposes: Demo our results and show things not well suited for a report, such as the value target GIF.
 

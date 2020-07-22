@@ -35,7 +35,7 @@ agents = [
 
 @app.route("/")
 def index():
-	return "<a href='https://peleiden.github.io/rl-rubiks' style='margin: 20px'>Go to main page</a>"
+	return "<a href='https://peleiden.github.io/librubiks' style='margin: 20px'>Go to main page</a>"
 
 @app.route("/info")
 def get_info():
