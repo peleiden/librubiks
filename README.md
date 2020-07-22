@@ -4,7 +4,7 @@
 ![pytest_master](https://github.com/peleiden/rl-rubiks/workflows/pytest_master/badge.svg?branch=master)
 
 ## Demo and explanation
-Visit the [Demo page](https://peleiden.github.io/rl-rubiks/) to see the trained Reinforcement Learning agents in action.
+Visit the [Demo page](https://peleiden.github.io/librubiks/) to see the trained Reinforcement Learning agents in action.
 ![](https://raw.githubusercontent.com/peleiden/rubiks-models/master/rubiks_eks.gif)
 This page also includes  brief explanations of the methods and a short guide to set up the solver backend.
 
