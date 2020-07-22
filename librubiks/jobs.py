@@ -21,6 +21,7 @@ from librubiks.solving.agents import ValueSearch, DeepAgent, Agent
 from librubiks.solving.evaluation import Evaluator, EvalData
 
 import librubiks.plots.trainplot as tp
+import librubiks.plots.analysisplot as ap
 import librubiks.plots.evalplot as ep
 
 
@@ -125,6 +126,7 @@ class TrainJob:
 			agent               = self.agent,
 			evaluator           = self.evaluator,
 			evaluation_interval = self.evaluation_interval,
+			name                = self.name,
 			with_analysis       = self.analysis,
 			logger              = self.log,
 		)
@@ -135,11 +137,11 @@ class TrainJob:
 		if self.evaluation_interval:
 			save_net(best_net, self.location, is_best=True)
 		paths = traindata.save(self.location)
-		self.log("Saved training data to\n\t" + "\n\t".join(paths))
+		self.log("Saved training data to", *paths, sep="\n  - ")
 
 		if analysisdata is not None:
 			paths = analysisdata.save(os.path.join(self.location, "analysis"))
-			self.log("Saved anaylsis data to\n\t" + "\n\t".join(paths))
+			self.log("Saved anaylsis data to", *paths, sep="\n  - ")
 
 	@staticmethod
 	def clean_dir(loc: str):
@@ -256,34 +258,63 @@ class EvalJob:
 		evaldata = self.evaluator.eval(self.agents)
 		subfolder = os.path.join(self.location, "evaluation_results")
 		paths = evaldata.save(subfolder)
-		self.log("Saved evaluation results to\n\t" + "\n\t".join(paths))
+		self.log("Saved evaluation results to", *paths, sep="\n  - ")
 
 
 class PlotJob:
+
+	_standard = (15, 10)
+	_wide = (22, 10)
 
 	def __init__(self, loc: str, train: bool, analysis: bool, eval_: bool):
 		self.loc = loc
 		self.train = train
 		self.analysis = analysis
 		self.eval = eval_
-	
+
+		self.log = Logger(os.path.join(self.loc, "plots.log"), "Plotting")
+		self.log(
+			"Plotting training"   if self.train    else "Not plotting training",
+			"Plotting analysis"   if self.analysis else "Not plotting analysis",
+			"Plotting evaluation" if self.eval     else "Not plotting evaluation",
+		)
+
 	def execute(self):
 		train_data, analysis_data, eval_data = self._get_data()
+
 		if train_data:
+			self.log.section("Plotting training data")
+			paths = []
 			for loc, t_d in train_data.items():  # Make train_data iterable again!
-				tp.plot_training(loc, t_d)
+				loc = os.path.join(loc, "train-plots")
+				os.makedirs(loc, exist_ok=True)
+				paths.append(tp.plot_training(loc, t_d, self._standard))
+			self.log("Saved training plots to", *paths, sep="\n  - ")
+
 		if analysis_data:
+			self.log.section("Plotting analysis data")
+			paths = []
 			for loc, a_d in analysis_data.items(loc, a_d):
-				tp.plot_net_changes(loc, a_d)
-				tp.plot_substate_distributions(loc, a_d)
-				tp.plot_value_targets(loc, a_d)
-				tp.visualize_first_states(loc, a_d)
+				loc = os.path.join(loc, "analysis-plots")
+				os.makedirs(loc, exist_ok=True)
+				paths.append(ap.plot_net_changes(loc, a_d, self._standard))
+				paths.append(ap.plot_substate_distributions(loc, a_d, self._standard))
+				paths.append(ap.plot_value_targets(loc, a_d, self._standard))
+				paths.append(ap.visualize_first_states(loc, a_d, self._standard))
+			self.log("Saved analysis plots to", *paths, sep="\n  - ")
+
 		if eval_data:
+			self.log.section("Plotting evaluation data")
+			paths = []
 			for loc, e_d in eval_data.items():
-				ep.plot_depth_win(loc, e_d)
-				ep.plot_sol_length_boxplots(loc, e_d)
-				ep.plot_time_states_winrate(loc, e_d)
-				ep.plot_distributions(loc, e_d)
+				loc = os.path.join(loc, "eval-plots")
+				os.makedirs(loc, exist_ok=True)
+				paths.append(ep.plot_depth_win(loc, e_d, self._standard))
+				paths.append(ep.plot_sol_length_boxplots(loc, e_d))
+				paths.append(ep.plot_time_states_winrate(loc, e_d, self._standard, is_times=False))
+				paths.append(ep.plot_time_states_winrate(loc, e_d, self._standard, is_times=True))
+				paths.extend(ep.plot_distributions(loc, e_d, self._standard))
+			self.log("Saved evaluation plots to", *paths, sep="\n  - ")
 
 	def _get_data(self) -> (dict, dict, dict):
 		"""
@@ -291,10 +322,19 @@ class PlotJob:
 		First for train, second for analysis, and third for evaluation
 		"""
 		
+		self.log.section("Searching for data directories")
 		directories   = self._list_dirs(self.loc)
-		train_dirs    = self._filter_by_name(TrainData.subfolder, directories)
+		train_dirs    = self._filter_by_name(TrainData.subfolder,    directories)
 		analysis_dirs = self._filter_by_name(AnalysisData.subfolder, directories)
-		eval_dirs     = self._filter_by_name(EvalData.subfolder, directories)
+		eval_dirs     = self._filter_by_name(EvalData.subfolder,     directories)
+
+		sep = "\n  - "
+		if self.train:
+			self.log("Found the following directories with training data",   *train_dirs,    sep=sep)
+		if self.analysis:
+			self.log("Found the following directories with analysis data",   *analysis_dirs, sep=sep)
+		if self.eval:
+			self.log("Found the following directories with evaluation data", *eval_dirs,     sep=sep)
 
 		train_data    = { x: TrainData.load(x)    for x in train_dirs    } if self.train    else None
 		analysis_data = { x: AnalysisData.load(x) for x in analysis_dirs } if self.analysis else None

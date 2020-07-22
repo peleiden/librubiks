@@ -82,11 +82,6 @@ class GridSearch(Optimizer):
 			parameters: dict,
 			logger: Logger=NullLogger(),
 		):
-		"""Set op BO class, set up utility function (acqusition function) and gaussian process.
-
-		:param float alpha:  Handles how much noise the GP can deal with
-		:param int n_restarts: Higher => more expensive, but more accurate
-		"""
 		super().__init__(target_function, parameters, logger)
 
 		self.logger(f"Created grid search")

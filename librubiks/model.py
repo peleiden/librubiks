@@ -25,7 +25,7 @@ class ModelConfig:
 	def __init__(
 		self,
 		env_key: str,
-		layer_sizes: list   = (4096, 2048, 512),
+		layer_sizes: list   = [4096, 2048, 512],
 		activation_function = "elu",
 		batchnorm: bool     = True,
 		dropout: float      = 0,
@@ -33,11 +33,11 @@ class ModelConfig:
 		init: str           = "glorot",
 		id: int             = None
 	):
-		assert type(layer_sizes) == list,\
+		assert isinstance(layer_sizes, list),\
 			f"Layers must be a list of integer sizes, not {type(layer_sizes)}"
 		assert activation_function in self.activation_functions.keys(),\
 			"Activation function must be one of " + ", ".join(self.activation_functions.keys()) + f", not {activation_function}"
-		assert type(batchnorm) == bool,\
+		assert isinstance(batchnorm, bool),\
 			f"Batchnorm must a boolean, not {batchnorm}"
 		assert 0 <= dropout <= 1,\
 			f"Dropout must be in [0, 1], not {dropout}"

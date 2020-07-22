@@ -26,8 +26,7 @@ def bernoulli_error(p: float, n: int, alpha: float, stringify: bool=False):
 	try: z = _quick_zs[alpha]
 	except KeyError: z = norm.ppf(1-alpha/2)
 	error = z * np.sqrt(p * (1-p) / n )
-	if stringify: return f"+/- {error*100:.0f} %"
-	return  error
+	return f"+/- {error*100:.0f} %" if stringify else error
 
 
 def get_commit():

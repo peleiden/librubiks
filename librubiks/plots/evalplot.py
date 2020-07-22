@@ -1,53 +1,17 @@
 import os
+from typing import List
 
 import numpy as np
-import matplotlib.colors as mcolour
 import matplotlib.pyplot as plt
 
-from librubiks import rc_params, rc_params_small
 from librubiks.utils import Logger, NullLogger, TickTock, bernoulli_error
-from librubiks.train import TrainData
-
-plt.rcParams.update(rc_params)
-base_colours = list(mcolour.BASE_COLORS)
-tab_colours = list(mcolour.TABLEAU_COLORS)
-all_colours = base_colours[:-1] + tab_colours[:-2]
+from librubiks.solving.evaluation import EvalData
+from librubiks.plots.defaults import rc_params, rc_params_small, all_colours
 
 
-def plot_evaluators(eval_results: dict, eval_states: dict, eval_times: dict, eval_settings: dict, save_dir: str, title: str='') -> list:
-	"""
-	Plots evaluation results
-	:param eval_results:   { agent name: [steps to solve, -1 for unfinished] }
-	:param eval_states:    { agent name: [states seen during solving] }
-	:param eval_times:     { agent name: [time spent solving] }
-	:param eval_settings:  { agent name: { 'n_games': int, 'max_time': float, 'max_states': int, 'scrambling_depths': np.ndarray } }
-	:param save_dir:       Directory in which to save plots
-	:param title:          If given, overrides auto generated title in (depth, winrate) plot
-	:return:               Locations of saved plots
-	"""
-	assert eval_results.keys() == eval_results.keys() == eval_times.keys() == eval_settings.keys(), "Keys of evaluation dictionaries should match"
-	os.makedirs(save_dir, exist_ok=True)
-
-	tab_colours = list(mcolour.TABLEAU_COLORS)
-	colours = [tab_colours[i%len(tab_colours)] for i in range(len(eval_results))]
-
-	d = _get_a_value(eval_settings)["scrambling_depths"][-1]
-	save_paths = [
-		cls._plot_depth_win(eval_results, save_dir, eval_settings, colours, title),
-		cls._sol_length_boxplots(eval_results, save_dir, eval_settings, colours),
-		cls._time_states_winrate_plot(eval_results, eval_times, True, d, save_dir, eval_settings, colours),
-		cls._time_states_winrate_plot(eval_results, eval_states, False, d, save_dir, eval_settings, colours),
-	]
-	p = cls._distribution_plots(eval_results, eval_times, eval_states, d, save_dir, eval_settings, colours)
-	if p != "ERROR":
-		save_paths.extend(p)
-
-	return save_paths
-
-
-def plot_depth_win(eval_results: dict, save_dir: str, eval_settings: dict, colours: list, title: str='') -> str:
+def plot_depth_win(loc: str, data: EvalData, size: tuple) -> str:
 	# depth, win%-graph
-	fig, ax = plt.subplots(figsize=(19.2, 10.8))
+	fig, ax = plt.subplots(figsize=size)
 	ax.set_ylabel(f"Percentage of {cls._get_a_value(eval_settings)['n_games']} games won")
 	ax.set_xlabel(f"Scrambling depth: Number of random rotations applied to cubes")
 	ax.locator_params(axis='x', integer=True, tight=True)
@@ -62,20 +26,20 @@ def plot_depth_win(eval_results: dict, save_dir: str, eval_settings: dict, colou
 	ax.legend()
 	ax.set_ylim([-5, 105])
 	ax.grid(True)
-	ax.set_title(title if title else (f"Percentage of cubes solved in {cls._get_a_value(eval_settings)['max_time']:.2f} seconds"))
+	ax.set_title(title or f"Percentage of cubes solved in {cls._get_a_value(eval_settings)['max_time']:.2f} seconds")
 	fig.tight_layout()
 
 	path = os.path.join(save_dir, "eval_winrates.png")
 	plt.savefig(path)
-	plt.clf()
+	plt.close()
 
 	return path
 
 
-def plot_sol_length_boxplots(eval_results: dict, save_dir: str, eval_settings: dict, colours: list) -> str:
+def plot_sol_length_boxplots(loc: str, data: EvalData) -> str:
 	# Solution length boxplots
 	plt.rcParams.update(rc_params_small)
-	max_width = 2
+	max_width = 3
 	width = min(len(eval_results), max_width)
 	height = (len(eval_results)+1) // width if width == max_width else 1
 	positions = [(i, j) for i in range(height) for j in range(width)]
@@ -123,15 +87,15 @@ def plot_sol_length_boxplots(eval_results: dict, save_dir: str, eval_settings: d
 	fig.subplots_adjust(top=0.88)
 	path = os.path.join(save_dir, "eval_sollengths.png")
 	plt.savefig(path)
-	plt.clf()
+	plt.close()
 
 	return path
 
 
-def plot_time_states_winrate(eval_results: dict, eval_times_or_states: dict, is_times: bool, depth: int, save_dir: str, eval_settings: dict, colours: list) -> str:
+def plot_time_states_winrate(loc: str, data: EvalData, size: tuple, is_times: bool) -> str:
 	# Make a (time spent, winrate) plot if is_times else (states explored, winrate)
 	# Only done for the deepest configuration
-	plt.figure(figsize=(19.2, 10.8))
+	plt.figure(figsize=size)
 	max_value = 0
 	for (agent, res), values, colour in zip(eval_results.items(), eval_times_or_states.values(), colours):
 		sort_idcs = np.argsort(values.ravel())  # Use values from all different depths - mainly for deep evaluation
@@ -149,13 +113,12 @@ def plot_time_states_winrate(eval_results: dict, eval_times_or_states: dict, is_
 	plt.tight_layout()
 	path = os.path.join(save_dir, "time_winrate.png" if is_times else "states_winrate.png")
 	plt.savefig(path)
-	plt.clf()
+	plt.close()
 
 	return path
 
 
-def plot_distributions(eval_results: dict, eval_times: dict, eval_states: dict, depth: int,
-						save_dir: str, eval_settings: dict, colours: list) -> str:
+def plot_distributions(loc: str, data: EvalData, size: tuple) -> List[str]:
 	"""Histograms of solution length, time used, and states explored for won games"""
 
 	normal_pdf = lambda x, mu, sigma: np.exp(-1/2 * ((x-mu)/sigma)**2) / (sigma * np.sqrt(2*np.pi))
@@ -176,7 +139,7 @@ def plot_distributions(eval_results: dict, eval_times: dict, eval_states: dict, 
 	paths_iter   = iter(paths)
 
 	for data, xlab, title, path in zip(eval_data, x_labels, titles, paths):
-		plt.figure(figsize=(19.2, 10.8))
+		plt.figure(figsize=size)
 		agents = list(data.keys())
 		values = [data[agent] for agent in agents]
 		apply_to_values = lambda fun: fun([fun(v) for v in values])
@@ -210,7 +173,7 @@ def plot_distributions(eval_results: dict, eval_times: dict, eval_states: dict, 
 		plt.title(f"{title} at depth {depth if depth else '100 - 999'}")
 		plt.legend()
 		plt.savefig(next(paths_iter))
-		plt.clf()
+		plt.close()
 
 	return paths
 

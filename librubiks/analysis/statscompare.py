@@ -200,7 +200,7 @@ class StatisticalComparison:
 			plt.tight_layout()
 			plt.subplots_adjust(top=0.88)
 			plt.savefig(os.path.join(self.p, f"{name}_normality.png"))
-			plt.clf()
+			plt.close()
 			self.log(f"Normality plot saved for {name}")
 
 	@staticmethod

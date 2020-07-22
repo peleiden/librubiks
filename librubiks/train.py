@@ -16,6 +16,7 @@ from librubiks.solving.evaluation import Evaluator
 
 @dataclass
 class TrainData(DataStorage):
+	name: str
 	states_per_rollout: int  # Number of states backpropped each rollout
 	rollouts: int  # Number of rollouts (or epochs)
 	rollout_games: int  # Number of games per rollout
@@ -23,6 +24,8 @@ class TrainData(DataStorage):
 	losses: np.ndarray  # Loss for each rollout
 	evaluation_rollouts: np.ndarray  # Array containing every rollout on which an evaluation was performed
 	evaluation_results: np.ndarray  # Solve shares
+	eval_games: int  # Number of games each evaluation
+	eval_time: float  # Time given to solve each game during evaluation
 
 	subfolder = "train-data"
 	json_name = "train-data.json"
@@ -54,7 +57,7 @@ class BatchFeedForward:
 					raise e
 				self.log.verbose(f"Intercepted RuntimeError {e}\nIncreasing number of ADI feed forward batches from "
 								 f"{self.batches} to {self.batches*self.increase_factor}")
-				self._increase()
+				self._more_batches()
 		return output
 
 	def update_net(self, net: Model):
@@ -63,7 +66,7 @@ class BatchFeedForward:
 	def __call__(self, x: torch.tensor) -> torch.tensor:
 		return self.forward(x)
 
-	def _increase(self):
+	def _more_batches(self):
 		self.batches *= self.increase_factor
 
 	def _get_slices(self):
@@ -92,6 +95,7 @@ class Train:
 		agent: DeepAgent,
 		evaluator: Evaluator,
 		evaluation_interval: int,
+		name: str,
 		with_analysis: bool,
 		value_criterion = torch.nn.MSELoss,
 		logger: Logger = NullLogger(),
@@ -143,6 +147,7 @@ class Train:
 			f"alpha update:    {self.alpha_update}",
 		]))
 
+		self.name = name
 		self.with_analysis = with_analysis
 
 		self.tt = TickTock()
@@ -285,6 +290,7 @@ class Train:
 		]))
 
 		traindata = TrainData(
+			name                = self.name,
 			states_per_rollout  = self.states_per_rollout,
 			rollouts            = self.rollouts,
 			rollout_games       = self.rollout_games,
@@ -292,6 +298,8 @@ class Train:
 			losses              = losses,
 			evaluation_rollouts = evaluation_rollouts,
 			evaluation_results  = np.array(evaluation_results),
+			eval_games          = self.evaluator.n_games,
+			eval_time           = self.evaluator.max_time,
 		)
 
 		return net, best_net, traindata, analysis.data if analysis is not None else None
