@@ -294,13 +294,13 @@ class PlotJob:
 		if analysis_data:
 			self.log.section("Plotting analysis data")
 			paths = []
-			for loc, a_d in analysis_data.items(loc, a_d):
+			for loc, a_d in analysis_data.items():
 				loc = os.path.join(loc, "analysis-plots")
 				os.makedirs(loc, exist_ok=True)
-				paths.append(ap.plot_net_changes(loc, a_d, self._standard))
 				paths.append(ap.plot_substate_distributions(loc, a_d, self._standard))
-				paths.append(ap.plot_value_targets(loc, a_d, self._standard))
 				paths.append(ap.visualize_first_states(loc, a_d, self._standard))
+				paths.append(ap.plot_value_targets(loc, a_d, self._standard))
+				# paths.append(ap.plot_net_changes(loc, a_d, self._standard))
 			self.log("Saved analysis plots to", *paths, sep="\n  - ")
 
 		if eval_data:

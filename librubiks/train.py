@@ -182,13 +182,15 @@ class Train:
 		best_net = net.clone()
 		self.agent.update_net(net)
 		if self.with_analysis:
-			analysis = TrainAnalysis(self.env,
-									 evaluation_rollouts,
-									 self.rollout_games,
-									 self.rollout_depth,
-									 extra_evals=100,
-									 reward_method=self.reward_method,
-									 logger=self.log)
+			analysis = TrainAnalysis(
+				self.env,
+				evaluation_rollouts,
+				self.rollout_games,
+				self.rollout_depth,
+				extra_evals = 100,
+				reward_method = self.reward_method,
+				logger = self.log,
+			)
 			analysis.orig_params = net.get_params()
 		else:
 			analysis = None
