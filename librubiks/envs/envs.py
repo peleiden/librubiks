@@ -273,6 +273,7 @@ class _Cube2024(_Cube):
 
 	def as_oh(self, state: np.ndarray) -> torch.tensor:
 		"""Takes in a state and returns an 1 x 480 one-hot tensor"""
+		assert state.shape == self.shape, f"State to be encoded has wrong shape: Expected {self.shape}, received {state.shape}"
 		oh = torch.zeros(1, 480, device=gpu)
 		idcs = self.oh_idcs + state
 		oh[0, idcs] = 1
