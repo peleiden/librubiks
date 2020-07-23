@@ -146,7 +146,7 @@ class ValueSearch(DeepAgent):
 			action = np.where(solutions)[0][0]
 			return action, substates[action], True, self.env.action_dim
 		else:
-			substates_oh = self.env.as_oh(substates)
+			substates_oh = self.env.multi_as_oh(substates)
 			v = self.net(substates_oh).squeeze().cpu().numpy()
 			action = np.argmax(v)
 			return action, substates[action], False, self.env.action_dim
