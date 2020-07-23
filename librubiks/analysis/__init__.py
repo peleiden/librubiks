@@ -17,6 +17,9 @@ class AnalysisData(DataStorage):
 	avg_value_targets: np.ndarray
 	substate_val_stds: np.ndarray
 
+	subfolder = "analysis-data"
+	json_name = "analysis-data.json"
+
 class TrainAnalysis:
 	"""Performs analysis of the training procedure to understand loss and training behaviour"""
 	def __init__(self,

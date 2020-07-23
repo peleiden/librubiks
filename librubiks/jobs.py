@@ -140,7 +140,7 @@ class TrainJob:
 		self.log("Saved training data to", *paths, sep="\n  - ")
 
 		if analysisdata is not None:
-			paths = analysisdata.save(os.path.join(self.location, "analysis"))
+			paths = analysisdata.save(os.path.join(self.location))
 			self.log("Saved anaylsis data to", *paths, sep="\n  - ")
 
 	@staticmethod
