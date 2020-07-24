@@ -137,6 +137,14 @@ class Environment(ABC):
 		if n is None:
 			n = self.action_dim
 		return np.tile(state, [n, *[1] * len(self.shape)])
+	
+	def _assert_shape(self, state: np.ndarray):
+		# Assert that the given state has the correct shape - else a ValueError is raised with a useful message
+		if state.shape != self.shape:
+			error_msg = f"State to be encoded has wrong shape: Expected {self.shape}, received {state.shape}"
+			if len(state.shape) - len(self.shape) == 1 and state.shape[1:] == self.shape:
+				error_msg += ". Did you use the single state method instead of the corresponding multi method?"
+			raise ValueError(error_msg)
 
 	####################
 	# Scrambling logic #
@@ -263,6 +271,7 @@ class _Cube2024(_Cube):
 		self.corner_maps, self.side_maps = self.maps
 
 	def act(self, state: np.ndarray, action: int):
+		self._assert_shape(state)
 		return self.maps[self.corner_side_idcs, action, state].copy()
 
 	def multi_act(self, states: np.ndarray, actions: np.ndarray):
@@ -273,7 +282,7 @@ class _Cube2024(_Cube):
 
 	def as_oh(self, state: np.ndarray) -> torch.Tensor:
 		"""Takes in a state and returns an 1 x 480 one-hot tensor"""
-		assert state.shape == self.shape, f"State to be encoded has wrong shape: Expected {self.shape}, received {state.shape}"
+		self._assert_shape(state)
 		oh = torch.zeros(1, 480, device=gpu)
 		idcs = self.oh_idcs + state
 		oh[0, idcs] = 1
@@ -343,6 +352,7 @@ class _Cube686(_Cube):
 		and if the direction is negative (0) or positive (1)
 		"""
 
+		self._assert_shape(state)
 		face, direction = self._face_dir(action)
 
 		altered_state = state.copy()
@@ -379,6 +389,7 @@ class _Cube686(_Cube):
 
 	def as_oh(self, state: np.ndarray) -> torch.Tensor:
 		# This representation is already one-hot encoded, so only ravelling is done
+		self._assert_shape(state)
 		state = np.expand_dims(state, 0)
 		oh_state = torch.from_numpy(state.reshape(len(state), 288)).to(gpu).float()
 		return oh_state
