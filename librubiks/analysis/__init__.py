@@ -7,7 +7,7 @@ from scipy.stats import entropy
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolour
 
-from librubiks import envs, DataStorage
+from librubiks import envs, DataStorage, no_grad
 from librubiks.model import Model
 from librubiks.utils import NullLogger, Logger
 
@@ -25,6 +25,7 @@ class AnalysisData(DataStorage):
 
 	subfolder = "analysis-data"
 	json_name = "analysis-data.json"
+
 
 class TrainAnalysis:
 	"""Performs analysis of the training procedure to understand loss and training behaviour"""
@@ -58,9 +59,7 @@ class TrainAnalysis:
 			self.env.get_solved(),
 			*self.env.multi_act(self.env.repeat_state(self.env.get_solved()), self.env.iter_actions()),
 		))
-		self.log(self.first_states.shape)
 		self.first_states = self.env.multi_as_oh(self.first_states)
-		self.log(self.first_states.shape)
 
 		extra_evals = min(int(evaluations[-1]) if len(evaluations) else 0, extra_evals)  # Wont add evals in the future (or if no evals are needed)
 		self.data = AnalysisData(
@@ -78,8 +77,10 @@ class TrainAnalysis:
 
 		self.log.verbose(f"Analysis of this training was enabled. Extra analysis is done for evaluations and for first {extra_evals} rollouts")
 
+	@no_grad
 	def rollout(self, net: Model, rollout: int, value_targets: torch.Tensor):
-		"""Saves statistics after a rollout has been performed for understanding the loss development
+		"""
+		Saves statistics after a rollout has been performed for understanding the loss development
 
 		:param torch.nn.Model net: The current net, used for saving values and policies of first 12 states
 		:param rollout int: The rollout number. Used to determine whether it is evaluation time => check targets
@@ -94,10 +95,14 @@ class TrainAnalysis:
 
 			# Calculating value targets
 			targets = value_targets.cpu().numpy().reshape((-1, self.depth))
-			self.data.avg_value_targets = np.append(
-				self.data.avg_value_targets,
-				targets.mean(axis=0),
-			)
+			if self.data.avg_value_targets.size:
+				self.data.avg_value_targets = np.append(
+					self.data.avg_value_targets,
+					[targets.mean(axis=0)],
+					axis=0,
+				)
+			else:
+				self.data.avg_value_targets = np.array([targets.mean(axis=0)])
 
 			# Calculating model change
 			model_change = torch.sqrt((net.get_params()-self.params)**2).mean().cpu()
@@ -109,14 +114,17 @@ class TrainAnalysis:
 			# In the beginning: Calculate value given to solved state and substates
 			if rollout <= self.data.extra_evals:
 				try:
-					self.data.first_state_values = np.vstack([self.data.first_state_values, net(self.first_states).cpu().detach().numpy().squeeze()])
+					self.data.first_state_values = np.vstack([
+						self.data.first_state_values,
+						np.expand_dims(net(self.first_states).cpu().detach().numpy(), 0)
+					])
 				except ValueError:
-					self.data.first_state_values = np.array(net(self.first_states).cpu().detach().numpy().squeeze())
+					self.data.first_state_values = np.expand_dims(net(self.first_states).cpu().detach().numpy(), 0)
 
 			net.train()
 
 	def ADI(self, values: torch.Tensor):
-		"""Saves statistics after a run of ADI. """
+		"""Saves statistics after a run of ADI."""
 		self.data.substate_val_stds = np.append(
 			self.data.substate_val_stds,
 			float(values.std(dim=1).mean()),

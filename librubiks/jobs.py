@@ -26,7 +26,7 @@ import librubiks.plots.evalplot as ep
 
 
 class TrainJob:
-	eval_games = 200  # Not given as arguments to __init__, as they should be accessible in runtime_estim
+	eval_games = 5  # Not given as arguments to __init__, as they should be accessible in runtime_estim
 	max_time = 0.05
 
 	def __init__(

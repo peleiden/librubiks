@@ -117,7 +117,6 @@ def plot_value_targets(loc: str, data: AnalysisData, size: tuple) -> str:
 	for target, rollout in zip(filter_by_bools(data.avg_value_targets, ~focus_rollouts), filter_by_bools(data.evaluations, ~focus_rollouts)):
 		plt.plot(data.depths + (data.reward_method != "lapanfix"), target, "--", color="grey", alpha=.4)
 	for target, rollout in zip(filter_by_bools(data.avg_value_targets, focus_rollouts), filter_by_bools(data.evaluations, focus_rollouts)):
-		# FIXME: size error here
 		plt.plot(data.depths + (data.reward_method != "lapanfix"), target, linewidth=3, color=next(colours), label=f"{rollout+1} Rollouts")
 	plt.legend(loc=1)
 	plt.xlim(np.array([-.05, 1.05]) * (data.depths[-1]+1))
