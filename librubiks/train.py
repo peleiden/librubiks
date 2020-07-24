@@ -188,7 +188,7 @@ class Train:
 				evaluation_rollouts,
 				self.rollout_games,
 				self.rollout_depth,
-				extra_evals = 100,
+				extra_evals = 50,
 				reward_method = self.reward_method,
 				logger = self.log,
 			)

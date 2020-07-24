@@ -61,7 +61,10 @@ class TrainAnalysis:
 		))
 		self.first_states = self.env.multi_as_oh(self.first_states)
 
-		extra_evals = min(int(evaluations[-1]) if len(evaluations) else 0, extra_evals)  # Wont add evals in the future (or if no evals are needed)
+		if evaluations.size:
+			extra_evals = min(int(evaluations[-1]), extra_evals)  # All rollouts are analyzed up until extra_evals
+		self.possible_evaluation_rollouts = np.unique(np.append(evaluations, range(extra_evals)))
+		
 		self.data = AnalysisData(
 			env_key = self.env.key,
 			reward_method = reward_method,
@@ -70,7 +73,7 @@ class TrainAnalysis:
 			first_state_values = np.array([]),
 			avg_value_targets = np.array([]),
 			substate_val_stds = np.array([]),
-			evaluations = np.unique(np.append(evaluations, range(extra_evals))),
+			evaluations = np.array([]),
 		)
 		self.param_changes = list()
 		self.param_total_changes = list()
@@ -90,8 +93,9 @@ class TrainAnalysis:
 		if self.params is None:
 			self.params = net.get_params()
 
-		if rollout in self.data.evaluations:
+		if rollout in self.possible_evaluation_rollouts:
 			net.eval()
+			self.data.evaluations = np.append(self.data.evaluations, rollout)
 
 			# Calculating value targets
 			targets = value_targets.cpu().numpy().reshape((-1, self.depth))
