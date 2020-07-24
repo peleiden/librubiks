@@ -64,12 +64,14 @@ class SimpleState:
 			   f"Sides:               {[int(x) for x in self.sides]}\n" + \
 			   f"Side orientations:   {[int(x) for x in self.side_orientations]}"
 
+
 @dataclass
 class ActionMap:
 	corner_map: tuple  # Corner mapping in positive revolution
 	side_map: tuple  # Side mapping in positive revolution
 	corner_static: int  # Corner orientation static - other two switch
 	side_switch: bool  # Side orientation switch
+
 
 class Actions:
 	F = ActionMap((0, 1, 2, 3, 0),
@@ -98,11 +100,13 @@ class Actions:
 				  False)
 
 
-def get_corner_pos(pos: int, orientation: int):
+def get_corner_pos(pos: int, orientation: int) -> int:
 	return pos * 3 + orientation
+
 
 def get_side_pos(pos: int, orientation: int) -> int:
 	return pos * 2 + orientation
+
 
 def get_tensor_map(dtype) -> np.ndarray:
 	"""
