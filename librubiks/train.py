@@ -46,7 +46,7 @@ class BatchFeedForward:
 		self.increase_factor = increase_factor
 
 	@no_grad
-	def forward(self, x: torch.tensor) -> torch.tensor:
+	def forward(self, x: torch.Tensor) -> torch.Tensor:
 		while True:
 			try:
 				output_parts = [self.net(x[slice_]) for slice_ in self._get_slices()]
@@ -63,7 +63,7 @@ class BatchFeedForward:
 	def update_net(self, net: Model):
 		self.net = net
 
-	def __call__(self, x: torch.tensor) -> torch.tensor:
+	def __call__(self, x: torch.Tensor) -> torch.Tensor:
 		return self.forward(x)
 
 	def _more_batches(self):
@@ -349,7 +349,7 @@ class Train:
 
 
 @no_grad
-def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float, analysis: TrainAnalysis) -> (torch.tensor, torch.tensor, torch.tensor):
+def ADI_traindata(train: Train, ff: BatchFeedForward, alpha: float, analysis: TrainAnalysis) -> (torch.Tensor, torch.Tensor, torch.Tensor):
 	""" Training data generation
 
 	Implements Autodidactic Iteration as per McAleer, Agostinelli, Shmakov and Baldi, "Solving the Rubik's Cube Without Human Knowledge" section 4.1

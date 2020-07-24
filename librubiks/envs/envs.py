@@ -81,13 +81,13 @@ class Environment(ABC):
 		"""
 		return (states == self.get_solved_instance()).all(axis=tuple(range(1, len(self.shape) + 1)))
 
-	def as_oh(self, state: np.ndarray) -> torch.tensor:
+	def as_oh(self, state: np.ndarray) -> torch.Tensor:
 		"""
 		One-hot encodes a state and returns the result saved on the gpu
 		"""
 		raise NotImplementedError
 
-	def multi_as_oh(self, states: np.ndarray) -> torch.tensor:
+	def multi_as_oh(self, states: np.ndarray) -> torch.Tensor:
 		"""
 		One-hot encodes n states and returns the result saved on the gpu
 		"""
@@ -153,7 +153,7 @@ class Environment(ABC):
 
 		return state, actions
 
-	def sequence_scrambler(self, games: int, depth: int, with_solved: bool) -> (np.ndarray, torch.tensor):
+	def sequence_scrambler(self, games: int, depth: int, with_solved: bool) -> (np.ndarray, torch.Tensor):
 		"""
 		An out-of-place scrambler which returns the state to each of the scrambles useful for ADI
 		Returns a games x n x 20 tensor with states as well as their one-hot representations (games * n) x 480
@@ -271,7 +271,7 @@ class _Cube2024(_Cube):
 		states = self.maps[corners_sides, repeated_actions, states.flat].reshape((len(states), 20)).copy()
 		return states
 
-	def as_oh(self, state: np.ndarray) -> torch.tensor:
+	def as_oh(self, state: np.ndarray) -> torch.Tensor:
 		"""Takes in a state and returns an 1 x 480 one-hot tensor"""
 		assert state.shape == self.shape, f"State to be encoded has wrong shape: Expected {self.shape}, received {state.shape}"
 		oh = torch.zeros(1, 480, device=gpu)
@@ -279,7 +279,7 @@ class _Cube2024(_Cube):
 		oh[0, idcs] = 1
 		return oh
 
-	def multi_as_oh(self, states: np.ndarray) -> torch.tensor:
+	def multi_as_oh(self, states: np.ndarray) -> torch.Tensor:
 		oh = torch.zeros(states.shape[0], 480, device=gpu)
 		idcs = self.oh_idcs + states
 		all_idcs = np.broadcast_to(np.arange(len(states)), (20, len(states)))
@@ -377,13 +377,13 @@ class _Cube686(_Cube):
 
 		return altered_states
 
-	def as_oh(self, state: np.ndarray) -> torch.tensor:
+	def as_oh(self, state: np.ndarray) -> torch.Tensor:
 		# This representation is already one-hot encoded, so only ravelling is done
 		state = np.expand_dims(state, 0)
 		oh_state = torch.from_numpy(state.reshape(len(state), 288)).to(gpu).float()
 		return oh_state
 
-	def multi_as_oh(self, states: np.ndarray) -> torch.tensor:
+	def multi_as_oh(self, states: np.ndarray) -> torch.Tensor:
 		oh_states = torch.from_numpy(states.reshape(len(states), 288)).to(gpu).float()
 		return oh_states
 
