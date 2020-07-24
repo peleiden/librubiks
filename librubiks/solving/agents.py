@@ -362,7 +362,7 @@ class AStar(DeepAgent):
 		:param states: (batch size, *(cube_dimensions)) of states
 		:param indeces: indeces in self.indeces corresponding to these states.
 		"""
-		states = self.env.as_oh(states)
+		states = self.env.multi_as_oh(states)
 		H = -self.net(states)
 		H = H.cpu().squeeze().detach().numpy()
 

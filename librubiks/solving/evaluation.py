@@ -121,14 +121,14 @@ class Evaluator:
 			self.log.verbose(f"Evaluation runtime\n{self.tt}")
 
 		data = EvalData(
-			games=self.n_games,
-			scrambling_depths=self.scrambling_depths.tolist(),
-			max_time=self.max_time,
-			max_states=self.max_states,
-			agents=[str(agent) for agent in agents],
-			sol_lengths=np.array(sollengths),
-			times=np.array(time_used),
-			states=np.array(states_explored),
+			games = self.n_games,
+			scrambling_depths = self.scrambling_depths.tolist(),
+			max_time = self.max_time,
+			max_states = self.max_states,
+			agents = [str(agent) for agent in agents],
+			sol_lengths = np.array(sollengths),
+			times = np.array(time_used),
+			states = np.array(states_explored),
 		)
 
 		return data

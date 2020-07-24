@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from librubiks.envs import get_env
 from librubiks.utils import TickTock
 from librubiks.analysis import AnalysisData
-from librubiks.plots.defaults import rc_params, all_colours
+from librubiks.plots.defaults import rc_params, colours
 
 try:
 	import networkx
@@ -112,12 +112,12 @@ def plot_value_targets(loc: str, data: AnalysisData, size: tuple) -> str:
 
 	plt.figure(figsize=size)
 	focus_rollouts = _get_evaluations_for_value(data)
-	colours = iter(all_colours)
+	colours_iter = iter(colours)
 	filter_by_bools = lambda list_, bools: [x for x, b in zip(list_, bools) if b]
 	for target, rollout in zip(filter_by_bools(data.avg_value_targets, ~focus_rollouts), filter_by_bools(data.evaluations, ~focus_rollouts)):
 		plt.plot(data.depths + (data.reward_method != "lapanfix"), target, "--", color="grey", alpha=.4)
 	for target, rollout in zip(filter_by_bools(data.avg_value_targets, focus_rollouts), filter_by_bools(data.evaluations, focus_rollouts)):
-		plt.plot(data.depths + (data.reward_method != "lapanfix"), target, linewidth=3, color=next(colours), label=f"{rollout+1} Rollouts")
+		plt.plot(data.depths + (data.reward_method != "lapanfix"), target, linewidth=3, color=next(colours_iter), label=f"{rollout+1} Rollouts")
 	plt.legend(loc=1)
 	plt.xlim(np.array([-.05, 1.05]) * (data.depths[-1]+1))
 	plt.xlabel("Scrambling depth")

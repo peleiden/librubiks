@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from librubiks.utils import TickTock, bernoulli_error
 from librubiks.train import TrainData
-from librubiks.plots.defaults import rc_params, all_colours
+from librubiks.plots.defaults import rc_params, colours
 
 plt.rcParams.update(rc_params)
 

@@ -256,8 +256,7 @@ class EvalJob:
 	def execute(self):
 		self.log(f"Beginning evaluator {self.name}\nLocation {self.location}\nCommit: {get_commit()}")
 		evaldata = self.evaluator.eval(self.agents)
-		subfolder = os.path.join(self.location, "evaluation_results")
-		paths = evaldata.save(subfolder)
+		paths = evaldata.save(self.location)
 		self.log("Saved evaluation results to", *paths, sep="\n- ")
 
 
@@ -330,11 +329,20 @@ class PlotJob:
 
 		sep = "\n- "
 		if self.train:
-			self.log("Found the following directories with training data",   *train_dirs,    sep=sep)
+			if train_dirs:
+				self.log("Found the following directories with training data", *train_dirs, sep=sep)
+			else:
+				self.log("Found no directories with training data")
 		if self.analysis:
-			self.log("Found the following directories with analysis data",   *analysis_dirs, sep=sep)
+			if analysis_dirs:
+				self.log("Found the following directories with analysis data", *analysis_dirs, sep=sep)
+			else:
+				self.log("Found no directories with analysis data")
 		if self.eval:
-			self.log("Found the following directories with evaluation data", *eval_dirs,     sep=sep)
+			if eval_dirs:
+				self.log("Found the following directories with evaluation data", *eval_dirs, sep=sep)
+			else:
+				self.log("Found no directories with evaluation data")
 
 		train_data    = { x: TrainData.load(x)    for x in train_dirs    } if self.train    else None
 		analysis_data = { x: AnalysisData.load(x) for x in analysis_dirs } if self.analysis else None
