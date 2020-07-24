@@ -170,14 +170,15 @@ class Train:
 		losses = np.zeros(self.rollouts)
 		evaluation_rollouts = self._get_evaluation_rollouts()
 		evaluation_results = list()
-		self.log(f"Beginning training. Optimization is performed in batches of {self.batch_size}")
-		self.log("\n".join([
+		self.log.section("Beginning training")
+		self.log(
 			f"Rollouts: {self.rollouts}",
 			f"Each consisting of {self.rollout_games} games with a depth of {self.rollout_depth}",
+			f"Optimization is performed in batches of {self.batch_size}",
 			f"Evaluations: {len(evaluation_rollouts)}",
 			f"Rough upper bound on total evaluation time during training: "
 			f"{TickTock.stringify_time(len(evaluation_rollouts)*self.evaluator.approximate_time(), TimeUnit.minute)}",
-		]))
+		)
 		best_solve = 0
 		best_net = net.clone()
 		self.agent.update_net(net)
@@ -203,6 +204,9 @@ class Train:
 		lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, self.gamma)
 
 		for rollout in range(self.rollouts):
+			if rollout and evaluation_rollouts.size and rollout - 1 in evaluation_rollouts:
+				self.log.section("Continuing training")
+			
 			reset_cuda()
 
 			generator_net = self._update_gen_net(generator_net, net) if self.tau != 1 else net

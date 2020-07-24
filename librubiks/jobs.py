@@ -137,11 +137,11 @@ class TrainJob:
 		if self.evaluation_interval:
 			save_net(best_net, self.location, is_best=True)
 		paths = traindata.save(self.location)
-		self.log("Saved training data to", *paths, sep="\n  - ")
+		self.log("Saved training data to", *paths, sep="\n- ")
 
 		if analysisdata is not None:
 			paths = analysisdata.save(os.path.join(self.location))
-			self.log("Saved anaylsis data to", *paths, sep="\n  - ")
+			self.log("Saved anaylsis data to", *paths, sep="\n- ")
 
 	@staticmethod
 	def clean_dir(loc: str):
@@ -258,7 +258,7 @@ class EvalJob:
 		evaldata = self.evaluator.eval(self.agents)
 		subfolder = os.path.join(self.location, "evaluation_results")
 		paths = evaldata.save(subfolder)
-		self.log("Saved evaluation results to", *paths, sep="\n  - ")
+		self.log("Saved evaluation results to", *paths, sep="\n- ")
 
 
 class PlotJob:
@@ -289,7 +289,7 @@ class PlotJob:
 				loc = os.path.join(loc, "train-plots")
 				os.makedirs(loc, exist_ok=True)
 				paths.append(tp.plot_training(loc, t_d, self._standard))
-			self.log("Saved training plots to", *paths, sep="\n  - ")
+			self.log("Saved training plots to", *paths, sep="\n- ")
 
 		if analysis_data:
 			self.log.section("Plotting analysis data")
@@ -301,7 +301,7 @@ class PlotJob:
 				paths.append(ap.visualize_first_states(loc, a_d, self._standard))
 				paths.append(ap.plot_value_targets(loc, a_d, self._standard))
 				# paths.append(ap.plot_net_changes(loc, a_d, self._standard))
-			self.log("Saved analysis plots to", *paths, sep="\n  - ")
+			self.log("Saved analysis plots to", *paths, sep="\n- ")
 
 		if eval_data:
 			self.log.section("Plotting evaluation data")
@@ -314,7 +314,7 @@ class PlotJob:
 				paths.append(ep.plot_time_states_winrate(loc, e_d, self._standard, is_times=False))
 				paths.append(ep.plot_time_states_winrate(loc, e_d, self._standard, is_times=True))
 				paths.extend(ep.plot_distributions(loc, e_d, self._standard))
-			self.log("Saved evaluation plots to", *paths, sep="\n  - ")
+			self.log("Saved evaluation plots to", *paths, sep="\n- ")
 
 	def _get_data(self) -> (dict, dict, dict):
 		"""
@@ -328,7 +328,7 @@ class PlotJob:
 		analysis_dirs = self._filter_by_name(AnalysisData.subfolder, directories)
 		eval_dirs     = self._filter_by_name(EvalData.subfolder,     directories)
 
-		sep = "\n  - "
+		sep = "\n- "
 		if self.train:
 			self.log("Found the following directories with training data",   *train_dirs,    sep=sep)
 		if self.analysis:
