@@ -6,7 +6,7 @@ from tests import MainTest
 
 from librubiks import gpu
 from librubiks.model import Model, ModelConfig, create_net, load_net, save_net
-from librubiks.utils import NullLogger
+from pelutils import NullLogger
 
 
 class TestModel(MainTest):

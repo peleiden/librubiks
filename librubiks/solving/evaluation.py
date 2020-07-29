@@ -4,10 +4,12 @@ from typing import List
 
 import numpy as np
 
-from librubiks import envs, DataStorage
-from librubiks.utils import NullLogger, Logger, TickTock, TimeUnit, bernoulli_error
-from librubiks.solving.agents import Agent
+from pelutils import DataStorage
 
+from librubiks import envs
+from pelutils import NullLogger, Logger, TickTock, TimeUnit
+from librubiks.solving.agents import Agent
+from librubiks.analysis.statscompare import bernoulli_error
 
 def _isdeep(scrambling_depths: np.ndarray) -> bool:
 	scrambling_depths = np.array(scrambling_depths)

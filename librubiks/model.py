@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from librubiks import gpu, envs
-from librubiks.utils import NullLogger
+from pelutils import NullLogger
 
 
 class ModelConfig:

@@ -5,7 +5,7 @@ import torch
 from librubiks import gpu, no_grad
 from librubiks import envs
 from librubiks.model import Model, load_net
-from librubiks.utils import TickTock, Logger
+from pelutils import TickTock, Logger
 
 tt = TickTock()
 log = Logger("data/local_analyses/net.log", "Analyzing MCTS")

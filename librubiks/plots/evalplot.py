@@ -4,10 +4,10 @@ from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
 
-from librubiks.utils import Logger, NullLogger, TickTock, bernoulli_error
+from pelutils import Logger, NullLogger, TickTock
 from librubiks.solving.evaluation import EvalData, Evaluator
 from librubiks.plots.defaults import rc_params, rc_params_small, colours
-
+from librubiks.analysis.statscompare import bernoulli_error
 
 def plot_depth_win(loc: str, data: EvalData, size: tuple) -> str:
 	# depth, win%-graph

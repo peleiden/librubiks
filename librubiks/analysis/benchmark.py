@@ -4,7 +4,7 @@ from scipy.stats import norm
 from librubiks import cube
 from librubiks.cube import get_is2024, set_is2024, store_repr, restore_repr
 from librubiks.cube.cube import _Cube2024
-from librubiks.utils import Logger, TickTock, TimeUnit
+from pelutils import Logger, TickTock, TimeUnit
 
 def _repstr():
 	return "20x24" if get_is2024() else "6x8x6"

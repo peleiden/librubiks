@@ -5,7 +5,7 @@ import heapq
 import numpy as np
 
 from librubiks import gpu, no_grad, envs
-from librubiks.utils import TickTock
+from pelutils import TickTock
 from librubiks.model import Model, load_net
 
 

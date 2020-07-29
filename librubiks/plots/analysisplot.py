@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from librubiks.envs import get_env
-from librubiks.utils import TickTock
+from pelutils import TickTock
 from librubiks.analysis import AnalysisData
 from librubiks.plots.defaults import rc_params, colours
 

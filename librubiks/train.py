@@ -3,10 +3,12 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from librubiks import gpu, no_grad, reset_cuda
-from librubiks.utils import Logger, NullLogger, unverbose, TickTock, TimeUnit
+from pelutils import DataStorage
 
-from librubiks import envs, DataStorage
+from librubiks import gpu, no_grad, reset_cuda
+from pelutils import Logger, NullLogger, unverbose, TickTock, TimeUnit
+
+from librubiks import envs
 from librubiks.analysis import TrainAnalysis, AnalysisData
 from librubiks.model import Model
 
@@ -206,7 +208,7 @@ class Train:
 		for rollout in range(self.rollouts):
 			if rollout and evaluation_rollouts.size and rollout - 1 in evaluation_rollouts:
 				self.log.section("Continuing training")
-			
+
 			reset_cuda()
 
 			generator_net = self._update_gen_net(generator_net, net) if self.tau != 1 else net

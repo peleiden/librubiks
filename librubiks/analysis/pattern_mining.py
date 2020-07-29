@@ -1,6 +1,6 @@
 import numpy as np
 
-from librubiks.utils import Logger
+from pelutils import Logger
 from librubiks import cube
 from librubiks.solving.agents import Agent, AStar
 

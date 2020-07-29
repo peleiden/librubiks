@@ -1,7 +1,7 @@
 import numpy as np
 from time import sleep
 
-from librubiks.utils import TickTock
+from pelutils import TickTock
 
 def test_tt():
 	tt = TickTock()

@@ -6,7 +6,7 @@ import numpy as np
 
 from runtrain import options
 from librubiks.jobs import TrainJob
-from librubiks.utils import set_seeds, Logger, Parser, TickTock
+from pelutils import set_seeds, Logger, Parser, TickTock
 
 if __name__ == "__main__":
 	set_seeds()

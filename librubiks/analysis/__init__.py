@@ -7,9 +7,11 @@ from scipy.stats import entropy
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolour
 
-from librubiks import envs, DataStorage, no_grad
+from pelutils import DataStorage
+
+from librubiks import envs, no_grad
 from librubiks.model import Model
-from librubiks.utils import NullLogger, Logger
+from pelutils import NullLogger, Logger
 
 
 @dataclass
@@ -64,7 +66,7 @@ class TrainAnalysis:
 		if evaluations.size:
 			extra_evals = min(int(evaluations[-1]), extra_evals)  # All rollouts are analyzed up until extra_evals
 		self.possible_evaluation_rollouts = np.unique(np.append(evaluations, range(extra_evals)))
-		
+
 		self.data = AnalysisData(
 			env_key = self.env.key,
 			reward_method = reward_method,

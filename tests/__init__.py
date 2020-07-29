@@ -1,6 +1,6 @@
 import os
 from shutil import rmtree
-from librubiks.utils import set_seeds
+from pelutils import set_seeds
 
 class MainTest:
 	@classmethod

@@ -8,7 +8,7 @@ from tests import MainTest
 
 
 from librubiks.analysis.statscompare import StatisticalComparison
-from librubiks.utils import  Logger
+from pelutils import  Logger
 
 class TestStatisticalComparison(MainTest):
 	def test_run(self):

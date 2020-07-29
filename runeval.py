@@ -1,8 +1,8 @@
 from glob import glob as glob  # glob
-
 from ast import literal_eval
 
-from librubiks.utils import Parser, set_seeds
+from pelutils import Parser, set_seeds
+
 from librubiks.jobs import EvalJob
 
 train_folders = sorted(glob('data/local_train2*'))  # Stops working in the next millenium

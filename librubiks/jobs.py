@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from librubiks import envs
-from librubiks.utils import get_commit, Logger
+from pelutils import get_commit, Logger
 
 from librubiks.model import Model, ModelConfig, create_net, save_net, load_net
 from librubiks.train import Train, TrainData

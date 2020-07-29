@@ -2,8 +2,9 @@ import os
 from shutil import rmtree
 from ast import literal_eval
 
+from pelutils import get_timestamp, Parser, set_seeds
+
 from librubiks.envs import environments
-from librubiks.utils import get_timestamp, Parser, set_seeds
 from librubiks.jobs import TrainJob
 
 options = {

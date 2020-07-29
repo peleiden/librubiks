@@ -12,8 +12,15 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 
 from librubiks import rc_params
-from librubiks.utils import Logger, TickTock
+from pelutils import Logger, TickTock
 plt.rcParams.update(rc_params)
+
+_quick_zs = { 0.1 : 1.6448536269514722, 0.05 : 1.959963984540054, 0.01 : 2.5758293035489004 }
+def bernoulli_error(p: float, n: int, alpha: float, stringify: bool=False):
+	try: z = _quick_zs[alpha]
+	except KeyError: z = norm.ppf(1-alpha/2)
+	error = z * np.sqrt(p * (1-p) / n )
+	return f"+/- {error*100:.0f} %" if stringify else error
 
 def interval(min_, max_, margin=0.05):
 	return np.array([ min_ - margin * (max_ - min_), max_ + margin * (max_ - min_) ])

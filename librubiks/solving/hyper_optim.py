@@ -10,7 +10,7 @@ from pprint import pformat
 import numpy as np
 from bayes_opt import BayesianOptimization, UtilityFunction
 
-from librubiks.utils import Logger, NullLogger, set_seeds
+from pelutils import Logger, NullLogger, set_seeds
 
 from librubiks.solving.evaluation import Evaluator
 

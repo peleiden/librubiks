@@ -2,9 +2,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from librubiks.utils import TickTock, bernoulli_error
+from pelutils import TickTock
 from librubiks.train import TrainData
 from librubiks.plots.defaults import rc_params, colours
+from librubiks.analysis.statscompare import bernoulli_error
 
 plt.rcParams.update(rc_params)
 
