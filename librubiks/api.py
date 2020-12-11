@@ -27,37 +27,37 @@ download(url % "config.json", net_loc)
 astar_params = { "lambda_": 0.07, "expansions": 27 }
 
 agents = [
-	{ "name": "A*",             "agent": AStar.from_saved(net_loc, use_best=True, **astar_params) },
-	{ "name": "Greedy value",   "agent": ValueSearch.from_saved(net_loc, use_best=True) },
-	{ "name": "BFS",            "agent": BFS() },
-	{ "name": "Random actions", "agent": RandomSearch()},
+    { "name": "A*",             "agent": AStar.from_saved(net_loc, use_best=True, **astar_params) },
+    { "name": "Greedy value",   "agent": ValueSearch.from_saved(net_loc, use_best=True) },
+    { "name": "BFS",            "agent": BFS() },
+    { "name": "Random actions", "agent": RandomSearch()},
 ]
 
 @app.route("/")
 def index():
-	return "<a href='https://peleiden.github.io/librubiks' style='margin: 20px'>Go to main page</a>"
+    return "<a href='https://peleiden.github.io/librubiks' style='margin: 20px'>Go to main page</a>"
 
 @app.route("/info")
 def get_info():
-	return jsonify({
-		"cuda": torch.cuda.is_available(),
-		"agents": [x["name"] for x in agents],
-		"parameters": { "A*": astar_params }
-	})
+    return jsonify({
+        "cuda": torch.cuda.is_available(),
+        "agents": [x["name"] for x in agents],
+        "parameters": { "A*": astar_params }
+    })
 
 @app.route("/solve", methods=["POST"])
 def solve():
-	data = literal_eval(request.data.decode("utf-8"))
-	time_limit = data["timeLimit"]
-	agent = agents[data["agentIdx"]]["agent"]
-	state = np.array(data["state"], dtype=env.dtype)
-	solution_found = agent.search(state, time_limit)
-	return jsonify({
-		"solution": solution_found,
-		"actions": [int(x) for x in agent.action_queue],
-		"exploredStates": len(agent),
-	})
+    data = literal_eval(request.data.decode("utf-8"))
+    time_limit = data["timeLimit"]
+    agent = agents[data["agentIdx"]]["agent"]
+    state = np.array(data["state"], dtype=env.dtype)
+    solution_found = agent.search(state, time_limit)
+    return jsonify({
+        "solution": solution_found,
+        "actions": [int(x) for x in agent.action_queue],
+        "exploredStates": len(agent),
+    })
 
 
 if __name__ == "__main__":
-	app.run(port=8000, debug=False)
+    app.run(port=8000, debug=False)

@@ -24,148 +24,148 @@ First in each index also sticker value
 
 
 def get_633maps(F, B, T, D, L, R):
-	corner_633map = (
-		((F, 0, 0), (L, 0, 2), (T, 2, 0)),
-		((F, 2, 0), (D, 0, 0), (L, 2, 2)),
-		((F, 2, 2), (R, 2, 0), (D, 0, 2)),
-		((F, 0, 2), (T, 2, 2), (R, 0, 0)),
-		((B, 0, 2), (T, 0, 0), (L, 0, 0)),
-		((B, 2, 2), (L, 2, 0), (D, 2, 0)),
-		((B, 2, 0), (D, 2, 2), (R, 2, 2)),
-		((B, 0, 0), (R, 0, 2), (T, 0, 2)),
-	)
-	side_633map = (
-		((F, 0, 1), (T, 2, 1)),
-		((F, 1, 0), (L, 1, 2)),
-		((F, 2, 1), (D, 0, 1)),
-		((F, 1, 2), (R, 1, 0)),
-		((T, 1, 0), (L, 0, 1)),
-		((D, 1, 0), (L, 2, 1)),
-		((D, 1, 2), (R, 2, 1)),
-		((T, 1, 2), (R, 0, 1)),
-		((B, 0, 1), (T, 0, 1)),
-		((B, 1, 2), (L, 1, 0)),
-		((B, 2, 1), (D, 2, 1)),
-		((B, 1, 0), (R, 1, 2)),
-	)
-	return corner_633map, side_633map
+    corner_633map = (
+        ((F, 0, 0), (L, 0, 2), (T, 2, 0)),
+        ((F, 2, 0), (D, 0, 0), (L, 2, 2)),
+        ((F, 2, 2), (R, 2, 0), (D, 0, 2)),
+        ((F, 0, 2), (T, 2, 2), (R, 0, 0)),
+        ((B, 0, 2), (T, 0, 0), (L, 0, 0)),
+        ((B, 2, 2), (L, 2, 0), (D, 2, 0)),
+        ((B, 2, 0), (D, 2, 2), (R, 2, 2)),
+        ((B, 0, 0), (R, 0, 2), (T, 0, 2)),
+    )
+    side_633map = (
+        ((F, 0, 1), (T, 2, 1)),
+        ((F, 1, 0), (L, 1, 2)),
+        ((F, 2, 1), (D, 0, 1)),
+        ((F, 1, 2), (R, 1, 0)),
+        ((T, 1, 0), (L, 0, 1)),
+        ((D, 1, 0), (L, 2, 1)),
+        ((D, 1, 2), (R, 2, 1)),
+        ((T, 1, 2), (R, 0, 1)),
+        ((B, 0, 1), (T, 0, 1)),
+        ((B, 1, 2), (L, 1, 0)),
+        ((B, 2, 1), (D, 2, 1)),
+        ((B, 1, 0), (R, 1, 2)),
+    )
+    return corner_633map, side_633map
 
 
 class SimpleState:
-	# Used for representation in the readable Actions maps
-	# Initialized in solved state
-	corners = np.arange(8)
-	corner_orientations = np.zeros(8, dtype=int)
-	sides = np.arange(12)
-	side_orientations = np.zeros(12, dtype=int)
-	def __str__(self):
-		return f"Corners:             {[int(x) for x in self.corners]}\n" + \
-			   f"Corner orientations: {[int(x) for x in self.corner_orientations]}\n" + \
-			   f"Sides:               {[int(x) for x in self.sides]}\n" + \
-			   f"Side orientations:   {[int(x) for x in self.side_orientations]}"
+    # Used for representation in the readable Actions maps
+    # Initialized in solved state
+    corners = np.arange(8)
+    corner_orientations = np.zeros(8, dtype=int)
+    sides = np.arange(12)
+    side_orientations = np.zeros(12, dtype=int)
+    def __str__(self):
+        return f"Corners:             {[int(x) for x in self.corners]}\n" + \
+               f"Corner orientations: {[int(x) for x in self.corner_orientations]}\n" + \
+               f"Sides:               {[int(x) for x in self.sides]}\n" + \
+               f"Side orientations:   {[int(x) for x in self.side_orientations]}"
 
 
 @dataclass
 class ActionMap:
-	corner_map: tuple  # Corner mapping in positive revolution
-	side_map: tuple  # Side mapping in positive revolution
-	corner_static: int  # Corner orientation static - other two switch
-	side_switch: bool  # Side orientation switch
+    corner_map: tuple  # Corner mapping in positive revolution
+    side_map: tuple  # Side mapping in positive revolution
+    corner_static: int  # Corner orientation static - other two switch
+    side_switch: bool  # Side orientation switch
 
 
 class Actions:
-	F = ActionMap((0, 1, 2, 3, 0),
-				  (0, 1, 2, 3, 0),
-				  0,
-				  False)
-	B = ActionMap((4, 7, 6, 5, 4),
-				  (8, 11, 10, 9, 8),
-				  0,
-				  False)
-	T = ActionMap((0, 3, 7, 4, 0),
-				  (0, 7, 8, 4, 0),
-				  1,
-				  True)
-	D = ActionMap((1, 5, 6, 2, 1),
-				  (2, 5, 10, 6, 2),
-				  1,
-				  True)
-	L = ActionMap((0, 4, 5, 1, 0),
-				  (1, 4, 9, 5, 1),
-				  2,
-				  False)
-	R = ActionMap((7, 3, 2, 6, 7),
-				  (3, 6, 11, 7, 3),
-				  2,
-				  False)
+    F = ActionMap((0, 1, 2, 3, 0),
+                  (0, 1, 2, 3, 0),
+                  0,
+                  False)
+    B = ActionMap((4, 7, 6, 5, 4),
+                  (8, 11, 10, 9, 8),
+                  0,
+                  False)
+    T = ActionMap((0, 3, 7, 4, 0),
+                  (0, 7, 8, 4, 0),
+                  1,
+                  True)
+    D = ActionMap((1, 5, 6, 2, 1),
+                  (2, 5, 10, 6, 2),
+                  1,
+                  True)
+    L = ActionMap((0, 4, 5, 1, 0),
+                  (1, 4, 9, 5, 1),
+                  2,
+                  False)
+    R = ActionMap((7, 3, 2, 6, 7),
+                  (3, 6, 11, 7, 3),
+                  2,
+                  False)
 
 
 def get_corner_pos(pos: int, orientation: int) -> int:
-	return pos * 3 + orientation
+    return pos * 3 + orientation
 
 
 def get_side_pos(pos: int, orientation: int) -> int:
-	return pos * 2 + orientation
+    return pos * 2 + orientation
 
 
 def get_tensor_map(dtype) -> np.ndarray:
-	"""
-	Returns a 12 x 2 x 24 mapping tensor
-	Axis 0 for action, axis 1 for side/corner, and axis 2 for state
-	A lookup gives the new value for a cubie
-	"""
-	actions = [Actions.F, Actions.B, Actions.T, Actions.D, Actions.L, Actions.R]
-	map_pos = list()
-	map_neg = list()
-	# Mappings for each action
-	for i in range(6):
-		action = actions[i]
-		neg = np.array(2*[np.arange(24)], dtype=dtype)
-		pos = np.array(2*[np.arange(24)], dtype=dtype)
-		# Mappings for each corner/side cubies
-		for j in range(4):
-			# Mappings for corners
-			for k in range(3):
-				new_orientation = k if k == action.corner_static else next(iter({0, 1, 2} - {action.corner_static, k}))
-				from_idx = get_corner_pos(action.corner_map[j], k)
-				to_idx = get_corner_pos(action.corner_map[j+1], new_orientation)
-				pos[0, from_idx] = to_idx
-				neg[0, to_idx] = from_idx
-			# Mappings for sides
-			for k in range(2):
-				new_orientation = k if not action.side_switch else int(not k)
-				from_idx = get_side_pos(action.side_map[j], k)
-				to_idx = get_side_pos(action.side_map[j+1], new_orientation)
-				pos[1, from_idx] = to_idx
-				neg[1, to_idx] = from_idx
-		map_pos.append(pos)
-		map_neg.append(neg)
-	
-	maps = np.vstack([map_neg, map_pos]).transpose((1, 0, 2))
+    """
+    Returns a 12 x 2 x 24 mapping tensor
+    Axis 0 for action, axis 1 for side/corner, and axis 2 for state
+    A lookup gives the new value for a cubie
+    """
+    actions = [Actions.F, Actions.B, Actions.T, Actions.D, Actions.L, Actions.R]
+    map_pos = list()
+    map_neg = list()
+    # Mappings for each action
+    for i in range(6):
+        action = actions[i]
+        neg = np.array(2*[np.arange(24)], dtype=dtype)
+        pos = np.array(2*[np.arange(24)], dtype=dtype)
+        # Mappings for each corner/side cubies
+        for j in range(4):
+            # Mappings for corners
+            for k in range(3):
+                new_orientation = k if k == action.corner_static else next(iter({0, 1, 2} - {action.corner_static, k}))
+                from_idx = get_corner_pos(action.corner_map[j], k)
+                to_idx = get_corner_pos(action.corner_map[j+1], new_orientation)
+                pos[0, from_idx] = to_idx
+                neg[0, to_idx] = from_idx
+            # Mappings for sides
+            for k in range(2):
+                new_orientation = k if not action.side_switch else int(not k)
+                from_idx = get_side_pos(action.side_map[j], k)
+                to_idx = get_side_pos(action.side_map[j+1], new_orientation)
+                pos[1, from_idx] = to_idx
+                neg[1, to_idx] = from_idx
+        map_pos.append(pos)
+        map_neg.append(neg)
+    
+    maps = np.vstack([map_neg, map_pos]).transpose((1, 0, 2))
 
-	return maps
+    return maps
 
 # Maps for 6x8x6 representation
 # The i'th index contain the neighbors of the i'th side in positive direction
 neighbors_686 = np.array([
-	[4, 3, 5, 2],  # Front
-	[3, 4, 2, 5],  # Back
-	[0, 5, 1, 4],  # Top
-	[5, 0, 4, 1],  # Down
-	[2, 1, 3, 0],  # Left
-	[1, 2, 0, 3],  # Right
+    [4, 3, 5, 2],  # Front
+    [3, 4, 2, 5],  # Back
+    [0, 5, 1, 4],  # Top
+    [5, 0, 4, 1],  # Down
+    [2, 1, 3, 0],  # Left
+    [1, 2, 0, 3],  # Right
 ])
 
 
 if __name__ == "__main__":
-	# Pretty print of tensor maps
-	maps = get_tensor_map(np.int8)
-	print(maps.shape)
-	for neg, pos in zip(maps[:6], maps[6:]):
-		print("".join([f"{x: 4}" for x in neg[0]]))
-		print("".join([f"{x: 4}" for x in neg[1]]))
-		print("".join([f"{x: 4}" for x in pos[0]]))
-		print("".join([f"{x: 4}" for x in pos[1]]))
-		print()
+    # Pretty print of tensor maps
+    maps = get_tensor_map(np.int8)
+    print(maps.shape)
+    for neg, pos in zip(maps[:6], maps[6:]):
+        print("".join([f"{x: 4}" for x in neg[0]]))
+        print("".join([f"{x: 4}" for x in neg[1]]))
+        print("".join([f"{x: 4}" for x in pos[0]]))
+        print("".join([f"{x: 4}" for x in pos[1]]))
+        print()
 
 
