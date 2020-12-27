@@ -137,7 +137,7 @@ class Environment(ABC):
         if n is None:
             n = self.action_dim
         return np.tile(state, [n, *[1] * len(self.shape)])
-    
+
     def _assert_shape(self, state: np.ndarray):
         # Assert that the given state has the correct shape - else a ValueError is raised with a useful message
         if state.shape != self.shape:

@@ -140,7 +140,7 @@ def get_tensor_map(dtype) -> np.ndarray:
                 neg[1, to_idx] = from_idx
         map_pos.append(pos)
         map_neg.append(neg)
-    
+
     maps = np.vstack([map_neg, map_pos]).transpose((1, 0, 2))
 
     return maps
@@ -160,7 +160,6 @@ neighbors_686 = np.array([
 if __name__ == "__main__":
     # Pretty print of tensor maps
     maps = get_tensor_map(np.int8)
-    print(maps.shape)
     for neg, pos in zip(maps[:6], maps[6:]):
         print("".join([f"{x: 4}" for x in neg[0]]))
         print("".join([f"{x: 4}" for x in neg[1]]))

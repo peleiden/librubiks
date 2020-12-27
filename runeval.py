@@ -1,7 +1,7 @@
 from glob import glob as glob  # glob
 from ast import literal_eval
 
-from pelutils import Parser, set_seeds
+from pelutils import Parser, set_seeds, log
 
 from librubiks.jobs import EvalJob
 
@@ -92,6 +92,7 @@ each of them.
 
 	parser = Parser(options, description=description, name='eval', description_last='Tue')
 	run_settings = parser.parse()
+	# TODO: log.configure(...)
 	jobs = [EvalJob(**settings, in_subfolder=len(run_settings)>1) for settings in run_settings]
 
 	for job in jobs:
