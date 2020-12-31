@@ -1,9 +1,10 @@
 # The required packages for running librubiks
+
 bayesian_optimization>=1.1.0
 scikit-learn==0.22.2
 scipy>=1.4.1
-torch==1.5.1
+torch>=1.7.1
 matplotlib>=3.0.3
 numpy>=1.19.0
-pelutils>=0.1.1
+pelutils>=0.2.13
 dataclasses>=0.6.0

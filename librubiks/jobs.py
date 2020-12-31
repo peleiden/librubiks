@@ -2,7 +2,7 @@ import sys, os
 from shutil import rmtree
 from collections import Counter
 from glob import glob as glob  # glob
-from typing import List
+from typing import List, Tuple
 
 import json
 
@@ -315,12 +315,12 @@ class PlotJob:
                 paths.extend(ep.plot_distributions(loc, e_d, self._standard))
             self.log("Saved evaluation plots to", *paths, sep="\n- ")
 
-    def _get_data(self) -> (dict, dict, dict):
+    def _get_data(self) -> Tuple[dict, dict, dict]:
         """
         Return three dicts (or None), the keys of which are locations and the values data
         First for train, second for analysis, and third for evaluation
         """
-        
+
         self.log.section("Searching for data directories")
         directories   = self._list_dirs(self.loc)
         train_dirs    = self._filter_by_name(TrainData.subfolder,    directories)

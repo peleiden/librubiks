@@ -197,7 +197,7 @@ class Train:
             analysis = None
 
         generator_net = net.clone()
-        ff = BatchFeedForward(generator_net, self.rollout_games * self.rollout_depth * self.env.action_dim, log)
+        ff = BatchFeedForward(generator_net, self.rollout_games * self.rollout_depth * self.env.action_dim)
 
         alpha = 1 if self.alpha_update == 1 else 0
         optimizer = self.optim(net.parameters(), lr=self.lr)

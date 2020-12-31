@@ -2,7 +2,7 @@ import os
 from shutil import rmtree
 from ast import literal_eval
 
-from pelutils import get_timestamp, Parser, set_seeds
+from pelutils import get_timestamp, Parser, set_seeds, log
 
 from librubiks.envs import environments
 from librubiks.jobs import TrainJob
@@ -118,11 +118,12 @@ __________________________________________________________________
 Start one or more Reinforcement Learning training session(s)
 on the Rubik's Cube using config or CLI arguments.
 """
-    set_seeds()
+    with log.log_errors:
+        set_seeds()
 
-    parser = Parser(options, description=description, name='train', description_last=True)
-    parsley = parser.parse()
-    TrainJob.clean_dir(parser.save_location)
-    jobs = [TrainJob(**settings) for settings in parsley]
-    for job in jobs:
-        job.execute()
+        parser = Parser(options, description=description, name='train', description_last=True)
+        parsley = parser.parse()
+        TrainJob.clean_dir(parser.save_location)
+        jobs = [TrainJob(**settings) for settings in parsley]
+        for job in jobs:
+            job.execute()
