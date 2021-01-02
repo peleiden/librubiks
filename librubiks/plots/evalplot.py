@@ -19,7 +19,7 @@ def plot_depth_win(loc: str, data: EvalData, size: tuple) -> str:
         win_percentages = (sol_lengths != -1).mean(axis=1) * 100
 
         ax.plot(data.scrambling_depths, win_percentages, linestyle='dashdot', color=colours[i])
-        ax.scatter(data.scrambling_depths, win_percentages, color=colours[i], label=colours[i])
+        ax.scatter(data.scrambling_depths, win_percentages, color=colours[i], label=data.agents[i])
     ax.legend()
     ax.set_ylim([-5, 105])
     ax.grid(True)
@@ -67,7 +67,7 @@ def plot_sol_length_boxplots(loc: str, data: EvalData) -> str:
             assert type(agent) == str, str(type(agent))
             ax.set_title(agent if axes.size > 1 else "Solution lengths for " + agent)
             results = [depth[depth != -1] for depth in results]
-            ax.boxplot(results)
+            ax.boxplot(results, positions=data.scrambling_depths)
             ax.grid(True)
         except IndexError:
             pass

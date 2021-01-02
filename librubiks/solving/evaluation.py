@@ -52,7 +52,7 @@ class Evaluator:
         log("\n".join([
             "Creating evaluator",
             f"Games per scrambling depth: {self.n_games}",
-            f"Scrambling depths: {scrambling_depths}" if _isdeep(self.scrambling_depths)
+            f"Scrambling depths: {scrambling_depths}" if not _isdeep(self.scrambling_depths)
             else f"Uniformly sampled in [{self.deep_depth.start}, {self.deep_depth.stop - 1}]",
         ]))
 
@@ -110,7 +110,7 @@ class Evaluator:
             states = np.reshape(states, (len(self.scrambling_depths), self.n_games))
             times = np.reshape(times, (len(self.scrambling_depths), self.n_games))
             sollengths.append(res)
-            states_explored.append(res)
+            states_explored.append(states)
             time_used.append(times)
 
             log(f"Evaluation results")

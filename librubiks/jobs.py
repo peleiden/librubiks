@@ -165,6 +165,7 @@ class EvalJob:
 
     def __init__(
         self,
+        *,
         # Set by parser, should correspond to options in runeval
         name: str,
         location: str,
@@ -178,9 +179,6 @@ class EvalJob:
         optimized_params: bool,
         astar_lambdas: List[float],
         astar_expansions: List[int],
-
-        # Currently not set by parser
-        in_subfolder: bool,  # Should be true if there are multiple experiments
     ):
 
         self.name = name
@@ -222,7 +220,7 @@ class EvalJob:
                     agent_args = {}
 
                 # Use parent folder, if parser has generated multiple folders
-                search_location = os.path.dirname(os.path.abspath(self.location)) if in_subfolder else self.location
+                search_location = os.path.dirname(os.path.abspath(self.location))
                 # DeepAgent might have to test multiple NN's
                 for folder in glob(f"{search_location}/*/") + [search_location]:
                     if not os.path.isfile(os.path.join(folder, 'model.pt')):

@@ -1,5 +1,4 @@
 from glob import glob as glob  # glob
-from ast import literal_eval
 
 from pelutils import Parser, set_seeds, log
 
@@ -11,9 +10,9 @@ train_folders = sorted(glob('data/local_train2*'))  # Stops working in the next 
 # Should correspond to arguments in EvalJob
 ###
 options = {
-	'location': {
-		'default':  train_folders[-1] if train_folders else '.',
-		'help':     'Location to search for model and save results.\nMust use location/<run_name>/model.pt structure.',
+	'env-key': {
+		'default':  'cube2024',
+		'help':     'The environment to evaluate.',
 		'type':     str,
 	},
 	'agents': {
@@ -23,7 +22,7 @@ options = {
 	},
 	'scrambling': {
 		'default':  'deep',
-		'help':     'The scrambling depths at which to test the model. Can be given as a singel integer for one depth or\n'
+		'help':     'The scrambling depths at which to test the model. Can be given as a single integer for one depth or\n'
 					'Two space-seperated integers (given in string delimeters such as --scrambling "10 25")',
 		# Ugly way to define list of two numbers or single number input or 'deep'
 		'type':     lambda args: ([int(args.split()[0]), int(args.split()[1])] if len(args.split()) > 1 else [int(args), int(args)+1]) if args != 'deep' else [0],
@@ -33,37 +32,33 @@ options = {
 		'help':     'Number of games to play in evaluation for each depth, for each agent.',
 		'type':     int,
 	},
-	'max_time': {
+	'max-time': {
 		'default':  0,
 		'help':     'Max searching time for agent. 0 for unlimited. Evaluation is terminated when either max_time or max_states is reached.',
 		'type':     float,
 	},
-	'max_states': {
+	'max-states': {
 		'default':  200_000,
 		'help':     'Max number of searched states for agent per configuration. 0 for unlimited. '
 					'Evaluation is terminated when either max_time or max_states is reached.',
 		'type':     lambda arg: int(float(arg)),
 	},
-	'use_best': {
-		'default':  True,
+	'use-best': {
+		'action':   "store_false",
 		'help':     "Set to True to use model-best.pt instead of model.pt.",
-		'type':     literal_eval,
-		'choices':  [True, False],
 	},
-	'optimized_params': {
-		'default':  False,
+	'optimized-params': {
+		'action':   "store_true",
 		'help':     'Set to True to overwrite agent params with the ones in corresponding JSON created by hyper_optim, if it exists. '
 					'If True, there must only be one agent given.',
-		'type':     literal_eval,
-		'choices':  [True, False],
 	},
-	'astar_lambdas': {
+	'astar-lambdas': {
 		'default':  '0.2',
 		'help':     'The A* search lambda parameter: How much to weight the distance from start to nodes in cost calculation. '
 					'There must be as many space seperated values as there are AStar agents given.',
 		'type':     lambda args: [float(x) for x in args.split()],
 	},
-	'astar_expansions': {
+	'astar-expansions': {
 		'default':  '100',
 		'help':     'The A* expansions parameter: How many nodes to expand to at a time. Can be thought of as a batch size: '
 					'Higher is much faster but lower should be a bit more precise. '
@@ -91,10 +86,9 @@ each of them.
 	with log.log_errors:
 		set_seeds()
 
-		parser = Parser(options, description=description, name='eval', description_last='Tue')
+		parser = Parser(options, description=description, name='eval', description_last='Tue', multiple_jobs=True)
 		run_settings = parser.parse()
-		# TODO: log.configure(...)
-		jobs = [EvalJob(**settings, in_subfolder=len(run_settings)>1) for settings in run_settings]
+		jobs = [EvalJob(**settings) for settings in run_settings]
 
 		for job in jobs:
 			job.execute()

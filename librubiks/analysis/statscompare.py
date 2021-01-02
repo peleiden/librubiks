@@ -241,11 +241,11 @@ def statscompare():
 	Does not support config arguments.
 	"""
 	parser = argparse.ArgumentParser(description='Compare two agents by doing t test of solution lengths and Xi-squared test of solve proportions')
-	parser.add_argument('--location', help="Folder containing evaluation results. If exactly two different agents are contained herein,"
+	parser.add_argument('location', help="Folder containing evaluation results. If exactly two different agents are contained herein,"
 		"these will be compared.\nOtherwise, the user will be prompted", type =str)
-	parser.add_argument('--alpha', help="Significane level used", type=float, default=0.01)
-	parser.add_argument('--compare_all', help="If true, all comparisons in folder is run, using p value cprrection",
-		type=literal_eval, default=True, choices=[True, False])
+	parser.add_argument('--alpha', help="Significance level used", type=float, default=0.01)
+	parser.add_argument('--compare-all', help="If true, all comparisons in folder is run, using p value cprrection",
+		action="store_false")
 
 	args = parser.parse_args()
 

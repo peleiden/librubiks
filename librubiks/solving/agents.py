@@ -1,5 +1,6 @@
 from abc import ABC
 from collections import deque
+from typing import Tuple
 import heapq
 
 import numpy as np
@@ -38,7 +39,7 @@ class Agent(ABC):
         self._explored_states = len(self.action_queue)
         return False
 
-    def _step(self, state: np.ndarray) -> (int, np.ndarray, bool, int):
+    def _step(self, state: np.ndarray) -> Tuple[int, np.ndarray, bool, int]:
         """
         Takes a step given a state
         :param state: numpy array containing a state
@@ -79,7 +80,7 @@ class DeepAgent(Agent, ABC):
         net.to(gpu)
         return cls(net)
 
-    def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
+    def _step(self, state: np.ndarray) -> Tuple[int, np.ndarray, bool]:
         raise NotImplementedError
 
     def update_net(self, net: Model):
@@ -88,7 +89,7 @@ class DeepAgent(Agent, ABC):
 
 
 class RandomSearch(Agent):
-    def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
+    def _step(self, state: np.ndarray) -> Tuple[int, np.ndarray, bool]:
         action = np.random.randint(self.env.action_dim)
         state = self.env.act(state, action)
         return action, state, self.env.is_solved(state), 1
@@ -101,7 +102,7 @@ class BFS(Agent):
     name = "Breadth-first search"
     states = dict()
 
-    def search(self, state: np.ndarray, time_limit: float = None, max_states: int = None) -> (np.ndarray, bool):
+    def search(self, state: np.ndarray, time_limit: float = None, max_states: int = None) -> Tuple[np.ndarray, bool]:
         # TODO: Use self.env.multi_act for le big speed
         time_limit, max_states = self.reset(time_limit, max_states)
         self.tt.tick()
@@ -139,7 +140,7 @@ class BFS(Agent):
 class ValueSearch(DeepAgent):
     name = "Greedy value"
 
-    def _step(self, state: np.ndarray) -> (int, np.ndarray, bool):
+    def _step(self, state: np.ndarray) -> Tuple[int, np.ndarray, bool]:
         substates = self.env.multi_act(self.env.repeat_state(state, self.env.action_dim), self.env.iter_actions())
         solutions = self.env.multi_is_solved(substates)
         if np.any(solutions):
@@ -204,7 +205,8 @@ class AStar(DeepAgent):
 
     @no_grad
     def search(self, state: np.ndarray, time_limit: float = None, max_states: int = None) -> bool:
-        """Seaches according to the batched, weighted A* algorithm
+        """
+        Seaches according to the batched, weighted A* algorithm
 
         While there is time left, the algorithm finds the best `expansions` open states
         (using priority queue) with lowest cost according to the A* cost heuristic (see `self.cost`).
@@ -223,7 +225,7 @@ class AStar(DeepAgent):
             self.tt.profile("Remove nodes from open priority queue")
             n_remove = min( len(self.open_queue), self.expansions )
             expand_idcs = np.array([ heapq.heappop(self.open_queue)[1] for _ in range(n_remove) ], dtype=int)
-            self.tt.end_profile("Remove nodes from open priority queue")
+            self.tt.end_profile()
 
             is_won = self.expand_batch(expand_idcs)
             if is_won:  # 🦀🦀🦀WE DID IT BOIS🦀🦀🦀
@@ -368,7 +370,7 @@ class AStar(DeepAgent):
 
         return self.lambda_ * self.G[indeces] + H
 
-    def reset(self, time_limit: float, max_states: int) -> (float, int):
+    def reset(self, time_limit: float, max_states: int) -> Tuple[float, int]:
         time_limit, max_states = super().reset(time_limit, max_states)
 
         self.open_queue     = list()
