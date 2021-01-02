@@ -160,11 +160,10 @@ neighbors_686 = np.array([
 if __name__ == "__main__":
     # Pretty print of tensor maps
     maps = get_tensor_map(np.int8)
-    for neg, pos in zip(maps[:6], maps[6:]):
-        print("".join([f"{x: 4}" for x in neg[0]]))
-        print("".join([f"{x: 4}" for x in neg[1]]))
-        print("".join([f"{x: 4}" for x in pos[0]]))
-        print("".join([f"{x: 4}" for x in pos[1]]))
-        print()
+    for m in maps[0]:
+        print(list(m))
+    print()
+    for m in maps[1]:
+        print(list(m))
 
 

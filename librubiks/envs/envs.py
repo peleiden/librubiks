@@ -17,7 +17,9 @@ Custom environments are easy to implement; simply let them inherit from the Envi
 and add an entry to the environments dict at the end of the file
 """
 
+import ctypes
 from abc import ABC
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -150,7 +152,7 @@ class Environment(ABC):
     # Scrambling logic #
     ####################
 
-    def scramble(self, depth: int, force_not_solved=False) -> (np.ndarray, np.ndarray, np.ndarray):
+    def scramble(self, depth: int, force_not_solved=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         actions = np.random.randint(0, self.action_dim, depth)
         state = self.get_solved()
         for action in actions:
@@ -161,7 +163,7 @@ class Environment(ABC):
 
         return state, actions
 
-    def sequence_scrambler(self, games: int, depth: int, with_solved: bool) -> (np.ndarray, torch.Tensor):
+    def sequence_scrambler(self, games: int, depth: int, with_solved: bool) -> Tuple[np.ndarray, torch.Tensor]:
         """
         An out-of-place scrambler which returns the state to each of the scrambles useful for ADI
         Returns a games x n x 20 tensor with states as well as their one-hot representations (games * n) x 480
@@ -268,16 +270,22 @@ class _Cube2024(_Cube):
         self.shape = self._solved_instance.shape
         self.corner_633map, self.side_633map = get_633maps(self.F, self.B, self.T, self.D, self.L, self.R)
         self.maps = get_tensor_map(self.dtype)
-        self.corner_maps, self.side_maps = self.maps
+
+        lib = ctypes.cdll.LoadLibrary("build/cube.so")
+        self.multi_act_cfun = lib.multi_act
 
     def act(self, state: np.ndarray, action: int):
         self._assert_shape(state)
         return self.maps[self.corner_side_idcs, action, state].copy()
 
     def multi_act(self, states: np.ndarray, actions: np.ndarray):
-        repeated_actions = np.broadcast_to(actions, (20, len(actions))).T.flat
-        corners_sides = np.broadcast_to(self.corner_side_idcs, (len(states), 20)).flat
-        states = self.maps[corners_sides, repeated_actions, states.flat].reshape((len(states), 20)).copy()
+        # Old numpy method
+        # repeated_actions = np.broadcast_to(actions, (20, len(actions))).T.flat
+        # corners_sides = np.broadcast_to(self.corner_side_idcs, (len(states), 20)).flat
+        # states = self.maps[corners_sides, repeated_actions, states.flat].reshape((len(states), 20)).copy()
+        # Using c
+        states = states.copy()
+        self.multi_act_cfun(ctypes.c_void_p(states.ctypes.data), ctypes.c_void_p(actions.ctypes.data), len(states))
         return states
 
     def as_oh(self, state: np.ndarray) -> torch.Tensor:
@@ -418,3 +426,15 @@ environments = {
 def get_env(env_key: str) -> Environment:
     assert env_key in environments, f"Environment must be one of " + ", ".join(environments.keys()) + f", but {env_key} was given"
     return environments[env_key](env_key)
+
+if __name__ == "__main__":
+    from pelutils import TickTock, TimeUnit
+    tt = TickTock()
+    env = get_env("cube2024")
+    n = env.action_dim ** 7
+    states = env.repeat_state(env.get_solved(), n)
+    actions = env.iter_actions(n // env.action_dim)
+    tt.tick()
+    states = env.multi_act(states, actions)
+    t = tt.tock()
+    print(tt.stringify_time(t/n, TimeUnit.nanosecond))
