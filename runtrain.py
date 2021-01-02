@@ -8,11 +8,6 @@ from librubiks.envs import environments
 from librubiks.jobs import TrainJob
 
 options = {
-    'location': {
-        'default':  'data/local_train' + get_timestamp(for_file=True),
-        'help':     "Save location for logs and plots",
-        'type':     str,
-    },
     'rollouts': {
         'default':  500,
         'help':     'Number of complete rollouts each consisting of simulating play through the Auto Didactic method AND performing minibatch learning on the resulting ',
@@ -95,11 +90,9 @@ options = {
         'type':     str,
         'choices':  list(environments.keys()),
     },
-    'analysis': {  # TODO: Make this a normal flag and make compatible with parser
-        'default':  False,
+    'analysis': {
+        'action':   'store_true',
         'help':     'If true, analysis of model changes, value and loss behaviour is done in each rollout and ADI pass',
-        'type':     literal_eval,
-        'choices':  [True, False],
     },
 }
 
@@ -123,7 +116,7 @@ on the Rubik's Cube using config or CLI arguments.
 
         parser = Parser(options, description=description, name='train', description_last=True)
         parsley = parser.parse()
-        TrainJob.clean_dir(parser.save_location)
+        parser.document_settings()
         jobs = [TrainJob(**settings) for settings in parsley]
         for job in jobs:
             job.execute()

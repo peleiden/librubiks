@@ -7,7 +7,7 @@ import torch
 from pelutils import DataStorage, log
 
 from librubiks import gpu, no_grad, reset_cuda
-from pelutils import log, TickTock, TimeUnit
+from pelutils import log, thousand_seps, TickTock, TimeUnit
 
 from librubiks import envs
 from librubiks.analysis import TrainAnalysis, AnalysisData
@@ -83,6 +83,7 @@ class Train:
     def __init__(
         self,
         env: envs.Environment,
+        *,
         rollouts: int,
         rollout_games: int,
         rollout_depth: int,
@@ -214,7 +215,7 @@ class Train:
             ff.update_net(generator_net)
 
             self.tt.profile("ADI training data")
-            training_data, value_targets, loss_weights = self.ADI_traindata(self, ff, alpha, analysis)
+            training_data, value_targets, loss_weights = self.ADI_traindata(ff, alpha, analysis)
             self.tt.profile("To cuda")
             training_data = training_data.to(gpu)
             value_targets = value_targets.to(gpu)
@@ -251,7 +252,7 @@ class Train:
                     log(f"Updated alpha from {alpha:.2f} to 1")
                     alpha = 1
 
-            if log.is_verbose() or rollout in (np.linspace(0, 1, 20)*self.rollouts).astype(int):
+            if log.verbose or rollout in (np.linspace(0, 1, 20)*self.rollouts).astype(int):
                 log(f"Rollout {rollout} completed with mean loss {losses[rollout]}")
 
             if self.with_analysis:
@@ -286,14 +287,14 @@ class Train:
         adi_time = self.tt.profiles["ADI training data"].sum()
         nstates = self.rollouts * self.rollout_games * self.rollout_depth * self.env.action_dim
         states_per_sec = int(nstates / (adi_time+train_time))
-        log("\n".join([
+        log(
             f"Total running time:               {self.tt.stringify_time(total_time, TimeUnit.second)}",
             f"- Training data for ADI:          {self.tt.stringify_time(adi_time, TimeUnit.second)} or {adi_time/total_time*100:.2f} %",
             f"- Training time:                  {self.tt.stringify_time(train_time, TimeUnit.second)} or {train_time/total_time*100:.2f} %",
             f"- Evaluation time:                {self.tt.stringify_time(eval_time, TimeUnit.second)} or {eval_time/total_time*100:.2f} %",
-            f"States witnessed incl. substates: {TickTock.thousand_seps(nstates)}",
-            f"- Per training second:            {TickTock.thousand_seps(states_per_sec)}",
-        ]))
+            f"States witnessed incl. substates: {thousand_seps(nstates)}",
+            f"- Per training second:            {thousand_seps(states_per_sec)}",
+        )
 
         traindata = TrainData(
             name                = self.name,
@@ -311,7 +312,7 @@ class Train:
         return net, best_net, traindata, analysis.data if analysis is not None else None
 
     def _update_gen_net(self, generator_net: Model, net: Model):
-        """Create a network with parameters weighted by self.tau"""
+        """ Create a network with parameters weighted by self.tau """
         self.tt.profile("Creating generator network")
         genparams, netparams = generator_net.state_dict(), net.state_dict()
         new_genparams = dict(genparams)
@@ -325,9 +326,7 @@ class Train:
 
     @staticmethod
     def _get_batches(size: int, bsize: int):
-        """
-        Generates indices for batch
-        """
+        """ Generates indices for batch """
         nbatches = int(np.ceil(size/bsize))
         idcs = np.arange(size)
         np.random.shuffle(idcs)
@@ -363,7 +362,6 @@ class Train:
             - policy_targets and value_targets contains optimal value and policy targets for each training point
             - loss_weights contains the weight for each training point (see weighted samples subsection of McAleer et al paper)
         """
-        #TODO: Convert `train` use to using the arguments with relevant data
 
         self.tt.profile("Scrambling")
         # Only include solved state in training if using Max Lapan convergence fix

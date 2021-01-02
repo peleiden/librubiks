@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import matplotlib.colors as mcolour
 
 rc_params = { "font.size": 24, "legend.fontsize": 22, "legend.framealpha": 0.5 }  # matplotlib settings

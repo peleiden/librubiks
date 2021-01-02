@@ -1,16 +1,15 @@
 from abc import ABC
 import json
 import os
-from time import time
 from copy import deepcopy
 from pprint import pformat
+from time import time
+from typing import Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from librubiks import gpu, envs
-from pelutils import log
 
 
 class ModelConfig:
@@ -83,7 +82,6 @@ class Model(nn.Module, ABC):
         self.env = envs.get_env(self.config.env_key)
 
         self._construct_net()
-        self.log(f"Created network\n{self.config}\n{self}")
 
     def _construct_net(self):
         """Constructs self.layers based on self.config"""
@@ -195,24 +193,23 @@ def create_net(config: ModelConfig) -> Model:
     raise KeyError(f"Network architecture should be 'fc' or 'res', but '{config.architecture}' was given")
 
 
-def save_net(net: Model, save_dir: str, is_best = False):
+def save_net(net: Model, save_dir: str, is_best = False) -> Tuple[str, str]:
     """
     Save the model and configuration to the given directory
-    The folder will include a pytorch model, and a json configuration file
+    The folder will include a pytorch model and a json configuration file
     """
 
     os.makedirs(save_dir, exist_ok=True)
     if is_best:
         model_path = os.path.join(save_dir, "model-best.pt")
         torch.save(net.state_dict(), model_path)
-        log(f"Saved best model to {model_path}")
-        return
+        return model_path, None
     model_path = os.path.join(save_dir, "model.pt")
     torch.save(net.state_dict(), model_path)
     conf_path = os.path.join(save_dir, "config.json")
     with open(conf_path, "w", encoding="utf-8") as conf:
         json.dump(net.config.as_json_dict(), conf, indent=4)
-    log(f"Saved model to {model_path} and configuration to {conf_path}")
+    return model_path, conf_path
 
 
 def load_net(load_dir: str, load_best = False) -> Model:

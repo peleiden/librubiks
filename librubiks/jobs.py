@@ -1,4 +1,4 @@
-import sys, os
+import os
 from shutil import rmtree
 from collections import Counter
 from glob import glob as glob  # glob
@@ -10,14 +10,14 @@ import numpy as np
 import torch
 
 from librubiks import envs
-from pelutils import get_commit, Logger
+from pelutils import get_commit, log
 
-from librubiks.model import Model, ModelConfig, create_net, save_net, load_net
+from librubiks.model import ModelConfig, create_net, save_net
 from librubiks.train import Train, TrainData
 from librubiks.analysis import AnalysisData
 
 from librubiks.solving import agents as ag
-from librubiks.solving.agents import ValueSearch, DeepAgent, Agent
+from librubiks.solving.agents import ValueSearch, DeepAgent
 from librubiks.solving.evaluation import Evaluator, EvalData
 
 import librubiks.plots.trainplot as tp
@@ -57,6 +57,9 @@ class TrainJob:
         scrambling_depths: tuple = (12,),
     ):
 
+        self.location = location
+        log.configure(f"{self.location}/train.log", name)
+
         self.name = name
         assert isinstance(self.name, str) and len(self.name) > 0
 
@@ -84,11 +87,7 @@ class TrainJob:
         self.optim_fn = getattr(torch.optim, optim_fn)
         assert issubclass(self.optim_fn, torch.optim.Optimizer)
 
-        self.location = location
-        self.log = Logger(f"{self.location}/train.log", name)  # Already creates logger at init to test whether path works
-        self.log(f"Initialized {self.name}")
-
-        self.evaluator = Evaluator(n_games=self.eval_games, max_time=self.max_time, scrambling_depths=scrambling_depths, logger=self.log)
+        self.evaluator = Evaluator(n_games=self.eval_games, max_time=self.max_time, scrambling_depths=scrambling_depths)
         self.evaluation_interval = evaluation_interval
         assert isinstance(self.evaluation_interval, int) and 0 <= self.evaluation_interval
         self.agent = agent
@@ -105,10 +104,12 @@ class TrainJob:
         self.reward_method = reward_method
         assert self.reward_method in ["paper", "lapanfix", "schultzfix", "reward0"]
 
+        log(f"Initialized training job '{self.name}'")
+
     def execute(self):
 
         # Sets representation
-        self.log.section(f"Starting job:\n{self.name} using {self.env} environment\nLocation {self.location}\nCommit: {get_commit()}")
+        log.section(f"Starting job:\n{self.name} using {self.env} environment\nLocation {self.location}\nCommit: {get_commit()}")
 
         train = Train(
             env                 = self.env,
@@ -128,20 +129,22 @@ class TrainJob:
             evaluation_interval = self.evaluation_interval,
             name                = self.name,
             with_analysis       = self.analysis,
-            logger              = self.log,
         )
 
-        net = create_net(self.model_cfg, self.log)
+        net = create_net(self.model_cfg)
+        log(f"Created network\n{net.config}\n{net}")
         net, best_net, traindata, analysisdata = train.train(net)
-        save_net(net, self.location)
+        p, c = save_net(net, self.location)
+        log("Saved model to %s and configuration to %s" % (p, c))
         if self.evaluation_interval:
-            save_net(best_net, self.location, is_best=True)
+            p, __ = save_net(best_net, self.location, is_best=True)
+            log("Saved best model %s" % p)
         paths = traindata.save(self.location)
-        self.log("Saved training data to", *paths, sep="\n- ")
+        log("Saved training data to", *paths, sep="\n- ")
 
         if analysisdata is not None:
             paths = analysisdata.save(os.path.join(self.location))
-            self.log("Saved anaylsis data to", *paths, sep="\n- ")
+            log("Saved anaylsis data to", *paths, sep="\n- ")
 
     @staticmethod
     def clean_dir(loc: str):
@@ -182,6 +185,7 @@ class EvalJob:
 
         self.name = name
         self.location = location
+        log.configure(f"{self.location}/{self.name}.log", name)
         self.env = envs.get_env(env_key)
 
         assert isinstance(games, int) and games
@@ -192,12 +196,11 @@ class EvalJob:
         assert isinstance(optimized_params, bool)
 
         # Create evaluator
-        self.log = Logger(f"{self.location}/{self.name}.log", name)  # Already creates logger at init to test whether path works
-        self.evaluator = Evaluator(n_games=games, max_time=max_time, max_states=max_states, scrambling_depths=scrambling, logger=self.log)
-        self.log("Collecting agents")
+        self.evaluator = Evaluator(n_games=games, max_time=max_time, max_states=max_states, scrambling_depths=scrambling)
 
         # Create agents
-        #TODO: If one lambda or expansion is given, this should apply to all
+        log("Collecting agents")
+        # TODO: If one lambda or expansion is given, this should apply to all
         astar_lambdas = iter(astar_lambdas)
         astar_expansions = iter(astar_expansions)
         self.agents = list()  # List of all agents that will be evaluated
@@ -230,15 +233,16 @@ class EvalJob:
                             with open(parampath, 'r') as paramfile:
                                 agent_args = json.load(paramfile)
                         else:
-                            self.log.throw(FileNotFoundError(
-                                f"Optimized params was set to true, but no file {parampath} was found, proceding with arguments for this {agent_str}."
+                            log.throw(FileNotFoundError(
+                                f"Optimized params was set to true, but no file {parampath} was found, "
+                                f"proceding with arguments for this {agent_str}."
                             ))
                     a = agent.from_saved(folder, use_best=use_best, **agent_args)
                     if a.env.__class__ == self.env.__class__:
                         self.agents.append(a)
-                        self.log(f"Added agent '{a}' to agent list")
+                        log(f"Added agent '{a}' to agent list")
                     else:
-                        self.log(f"Agent '{a}' was not added to list, as the network uses the {a.env} environment")
+                        log(f"Agent '{a}' was not added to list, as the network uses the {a.env} environment")
 
                 # Handl agents with the same name
                 # TODO Better way to uniquely identify searchers than layer sizes - perhaps name parameter?
@@ -248,16 +252,16 @@ class EvalJob:
                         agent.name += " - " + ", ".join([str(x) for x in agent.net.config.layer_sizes])
             else:
                 self.agents.append(agent(self.env))
-                self.log(f"Added agent '{self.agents[-1]}' to agent list")
+                log(f"Added agent '{self.agents[-1]}' to agent list")
 
-            self.log(f"Initialized {self.name} with agents " + '\n'.join(str(s) for s in self.agents) + "\nEnvironment: {self.env}")
-            self.log(f"Time estimate: {len(self.agents) * self.evaluator.approximate_time() / 60:.2f} min. (Rough upper bound)")
+            log(f"Initialized {self.name} with agents", *self.agents, f"\nEnvironment: {self.env}")
+            log(f"Time estimate: {len(self.agents) * self.evaluator.approximate_time() / 60:.2f} min. (Rough upper bound)")
 
     def execute(self):
-        self.log(f"Beginning evaluator {self.name}\nLocation {self.location}\nCommit: {get_commit()}")
+        log(f"Beginning evaluator {self.name}\nLocation {self.location}\nCommit: {get_commit()}")
         evaldata = self.evaluator.eval(self.agents)
         paths = evaldata.save(self.location)
-        self.log("Saved evaluation results to", *paths, sep="\n- ")
+        log("Saved evaluation results to", *paths, sep="\n- ")
 
 
 class PlotJob:
@@ -271,8 +275,8 @@ class PlotJob:
         self.analysis = analysis
         self.eval = eval_
 
-        self.log = Logger(os.path.join(self.loc, "plots.log"), "Plotting")
-        self.log(
+        log.configure(os.path.join(self.loc, "plots.log"), "Plotting")
+        log(
             "Plotting training"   if self.train    else "Not plotting training",
             "Plotting analysis"   if self.analysis else "Not plotting analysis",
             "Plotting evaluation" if self.eval     else "Not plotting evaluation",
@@ -282,16 +286,16 @@ class PlotJob:
         train_data, analysis_data, eval_data = self._get_data()
 
         if train_data:
-            self.log.section("Plotting training data")
+            log.section("Plotting training data")
             paths = []
             for loc, t_d in train_data.items():  # Make train_data iterable again!
                 loc = os.path.join(loc, "train-plots")
                 os.makedirs(loc, exist_ok=True)
                 paths.append(tp.plot_training(loc, t_d, self._standard))
-            self.log("Saved training plots to", *paths, sep="\n- ")
+            log("Saved training plots to", *paths, sep="\n- ")
 
         if analysis_data:
-            self.log.section("Plotting analysis data")
+            log.section("Plotting analysis data")
             paths = []
             for loc, a_d in analysis_data.items():
                 loc = os.path.join(loc, "analysis-plots")
@@ -300,10 +304,10 @@ class PlotJob:
                 paths.append(ap.visualize_first_states(loc, a_d, self._standard))
                 paths.append(ap.plot_value_targets(loc, a_d, self._standard))
                 # paths.append(ap.plot_net_changes(loc, a_d, self._standard))
-            self.log("Saved analysis plots to", *paths, sep="\n- ")
+            log("Saved analysis plots to", *paths, sep="\n- ")
 
         if eval_data:
-            self.log.section("Plotting evaluation data")
+            log.section("Plotting evaluation data")
             paths = []
             for loc, e_d in eval_data.items():
                 loc = os.path.join(loc, "eval-plots")
@@ -313,7 +317,7 @@ class PlotJob:
                 paths.append(ep.plot_time_states_winrate(loc, e_d, self._standard, is_times=False))
                 paths.append(ep.plot_time_states_winrate(loc, e_d, self._standard, is_times=True))
                 paths.extend(ep.plot_distributions(loc, e_d, self._standard))
-            self.log("Saved evaluation plots to", *paths, sep="\n- ")
+            log("Saved evaluation plots to", *paths, sep="\n- ")
 
     def _get_data(self) -> Tuple[dict, dict, dict]:
         """
@@ -321,7 +325,7 @@ class PlotJob:
         First for train, second for analysis, and third for evaluation
         """
 
-        self.log.section("Searching for data directories")
+        log.section("Searching for data directories")
         directories   = self._list_dirs(self.loc)
         train_dirs    = self._filter_by_name(TrainData.subfolder,    directories)
         analysis_dirs = self._filter_by_name(AnalysisData.subfolder, directories)
@@ -330,26 +334,26 @@ class PlotJob:
         sep = "\n- "
         if self.train:
             if train_dirs:
-                self.log("Found the following directories with training data", *train_dirs, sep=sep)
+                log("Found the following directories with training data", *train_dirs, sep=sep)
             else:
-                self.log("Found no directories with training data")
+                log("Found no directories with training data")
         if self.analysis:
             if analysis_dirs:
-                self.log("Found the following directories with analysis data", *analysis_dirs, sep=sep)
+                log("Found the following directories with analysis data", *analysis_dirs, sep=sep)
             else:
-                self.log("Found no directories with analysis data")
+                log("Found no directories with analysis data")
         if self.eval:
             if eval_dirs:
-                self.log("Found the following directories with evaluation data", *eval_dirs, sep=sep)
+                log("Found the following directories with evaluation data", *eval_dirs, sep=sep)
             else:
-                self.log("Found no directories with evaluation data")
+                log("Found no directories with evaluation data")
 
         train_data    = { x: TrainData.load(x)    for x in train_dirs    } if self.train    else None
         analysis_data = { x: AnalysisData.load(x) for x in analysis_dirs } if self.analysis else None
         eval_data     = { x: EvalData.load(x)     for x in eval_dirs     } if self.eval     else None
 
         return train_data, analysis_data, eval_data
-    
+
     @staticmethod
     def _list_dirs(loc: str) -> List[str]:
         return [x[0] for x in os.walk(loc)]

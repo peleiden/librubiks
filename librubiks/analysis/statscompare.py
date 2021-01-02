@@ -11,14 +11,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 
-from librubiks import rc_params
-from pelutils import Logger, TickTock
+from librubiks.plots.defaults import rc_params
+from pelutils import log, TickTock
 plt.rcParams.update(rc_params)
 
 _quick_zs = { 0.1 : 1.6448536269514722, 0.05 : 1.959963984540054, 0.01 : 2.5758293035489004 }
 def bernoulli_error(p: float, n: int, alpha: float, stringify: bool=False):
-	try: z = _quick_zs[alpha]
-	except KeyError: z = norm.ppf(1-alpha/2)
+	try:
+		z = _quick_zs[alpha]
+	except KeyError:
+		z = stats.norm.ppf(1-alpha/2)
 	error = z * np.sqrt(p * (1-p) / n )
 	return f"+/- {error*100:.0f} %" if stringify else error
 
@@ -31,9 +33,9 @@ def linear(a, b, min_, max_, margin=0.05):
 	return x, y
 
 class StatisticalComparison:
-	def __init__(self, path: str, log: Logger, compare_all: bool = False):
+	def __init__(self, path: str, compare_all: bool = False):
+		log.configure(os.path.join(path, "stats.log"), "Statistical comparison")
 		self.p = path
-		self.log = log
 		self.compare_all = compare_all
 
 		self.names = None
@@ -57,18 +59,18 @@ class StatisticalComparison:
 						print(subfolder, agents)
 						self.names.extend(agents)
 						paths.extend([os.path.join(f, 'evaluation_results', a) for a in agents])
-		print(paths)
+
 		if not self.names: raise FileNotFoundError(f"No results found in{self.p} or subfolders")
 		if len(self.names) > 2:
 			if not self.compare_all:
-				self.log("Multiple agents were submitted. If you want to run all combinations, rerun with --compare_all True.")
+				log("Multiple agents were submitted. If you want to run all combinations, rerun with --compare_all True.")
 				choices = "\n".join(f'{i}: {f}' for i, f in enumerate(self.names))
-				chosen = [ int(input(f"Please choose {w} agent (give index): {choices}")) for w in ('first', 'second') ]
+				chosen = [ int(log.input(f"Please choose {w} agent (give index): {choices}")) for w in ('first', 'second') ]
 				self.names = [ self.names[i] for i in chosen ]
 				paths = copy(self.names)
 
 		self.results = [ np.load(os.path.join(self.p, f"{path}_results.npy")) for path in paths ]
-		self.log(f"Results loaded for agents\n\t{self.names}\nfrom path\n\t{self.p}")
+		log(f"Results loaded for agents\n\t{self.names}\nfrom path\n\t{self.p}")
 
 	def run_comparisons(self, alpha: float):
 		""" Do all the statistical comparisons of agent combinations"""
@@ -77,24 +79,24 @@ class StatisticalComparison:
 			names = [self.names[i] for i in idcs]
 			results = [self.results[i] for i in idcs]
 			all_names.append(names)
-			self.log.section(f"Comparison of agents\n\t{names}")
+			log.section(f"Comparison of agents\n\t{names}")
 			p, _ = self.length_ttest(results, alpha)
 			length_ps.append(p)
 			p, _ = self.solve_proptest(results, alpha)
 			solution_ps.append(p)
 
 		length_ps, solution_ps = self.fdr_correction(np.array(length_ps)), self.fdr_correction(np.array(solution_ps))
-		self.log.section("CORRECTED p values")
+		log.section("CORRECTED p values")
 		for i, name in enumerate(all_names):
-			self.log(f"Corrected p values for {name}")
-			self.log(f"Corrected solution length p value for {length_ps[i]}", with_timestamp=False)
-			self.log(f"Corrected solution proportion p value for {solution_ps[i]}", with_timestamp=False)
+			log(f"Corrected p values for {name}")
+			log(f"Corrected solution length p value for {length_ps[i]}", with_timestamp=False)
+			log(f"Corrected solution proportion p value for {solution_ps[i]}", with_timestamp=False)
 		return length_ps, solution_ps
 
 	def length_ttest(self, results: list, alpha: float):
 		""" Welch T test that solution lengths are equal.
 		See method 3.47 and 3.49 in https://02402.compute.dtu.dk/enotes/ """
-		self.log.section("Test of equal solution lengths")
+		log.section("Test of equal solution lengths")
 		solution_lengths = [r[r != -1] for r in results]
 		V = np.array([s.var(ddof=1) for s in solution_lengths])
 		M = np.array([s.mean() for s in solution_lengths])
@@ -108,17 +110,17 @@ class StatisticalComparison:
 		qt = stats.t.ppf(1-alpha/2, df=df_welch)
 		mean_error = qt * np.sqrt(m_var)
 		CI = mu + np.array([-1, 1]) * mean_error
-		self.log("Two-sided Welch t-test of H0: mean(sol_lengths_agent1) = mean(sol_lengths_agent2) performed\n"
+		log("Two-sided Welch t-test of H0: mean(sol_lengths_agent1) = mean(sol_lengths_agent2) performed\n"
 			f"in t-distribution with {df_welch} degrees of freedom", with_timestamp=False)
-		self.log(f"Resulting (non-corrected) p value and t test statistic:\n\t {p} {t_obs}", with_timestamp=False)
-		self.log(f"Confidence interval at level {alpha} of difference is\n\t{mu} +/- {mean_error}\n\t(which is {CI})",
+		log(f"Resulting (non-corrected) p value and t test statistic:\n\t {p} {t_obs}", with_timestamp=False)
+		log(f"Confidence interval at level {alpha} of difference is\n\t{mu} +/- {mean_error}\n\t(which is {CI})",
 				with_timestamp=False)
 		return p, CI
 
 	def solve_proptest(self, results: list, alpha: float):
 		""" Test that solve proportions are equal.
 		See method 7.18 in https://02402.compute.dtu.dk/enotes/ """
-		self.log.section("Test of equal solve proportions")
+		log.section("Test of equal solve proportions")
 		X = np.array([(r != -1).sum() for r in results])
 		N = np.array([r.size for r in results])
 		P = X / N
@@ -126,23 +128,23 @@ class StatisticalComparison:
 		prop = X.sum() / N.sum()
 		if mu == 0:
 			if P[0] == 1:
-				self.log("Proportions are both at 100%, no analysis can be carried out", with_timestamp=False)
-				return 1, np.array([0,0])
+				log("Proportions are both at 100%, no analysis can be carried out", with_timestamp=False)
+				return 1, np.array([0, 0])
 			if P[1] == 0:
-				self.log("Proportions are both at 0%, no analysis can be carried out", with_timestamp=False)
-				return 1, np.array([0,0])
+				log("Proportions are both at 0%, no analysis can be carried out", with_timestamp=False)
+				return 1, np.array([0, 0])
 		z_obs = mu / np.sqrt( prop * (1-prop) * (1/N).sum() )
 		p = 2*(1-stats.norm.cdf(abs(z_obs)))
 
 		qz = stats.norm.ppf(1-alpha/2)
 		mean_error = qz * np.sqrt((P*(1-P)/N).sum())
 		CI = mu + np.array([-1, 1]) * mean_error
-		self.log("Two-sided proportion test of H0: mean(sol_prop) = mean(sol_prop) performed\n"
+		log("Two-sided proportion test of H0: mean(sol_prop) = mean(sol_prop) performed\n"
 			f"in the standard normal distribution", with_timestamp=False)
-		self.log(f"Resulting (non-corrected) p value and z test statistic:\n\t {p} {z_obs}", with_timestamp=False)
-		self.log(f"Confidence interval at level {alpha} of difference is\n\t{mu} +/- {mean_error}\n\t(which is {CI})",
+		log(f"Resulting (non-corrected) p value and z test statistic:\n\t {p} {z_obs}", with_timestamp=False)
+		log(f"Confidence interval at level {alpha} of difference is\n\t{mu} +/- {mean_error}\n\t(which is {CI})",
 				with_timestamp=False)
-		self.log("Proportion samples (all should be > 10 for accurate model): "
+		log("Proportion samples (all should be > 10 for accurate model): "
 				f"{[int(i) for i in N*P]}, {[int(i) for i in N*(1-P)]}", with_timestamp=False)
 		return p, CI
 
@@ -150,7 +152,8 @@ class StatisticalComparison:
 		"""Check normality of solution lengths"""
 		for i, result in enumerate(self.results):
 			result, name = result[result!=-1], self.names[i]
-			if not len(result): continue
+			if not len(result):
+				continue
 			plt.figure(figsize=(15, 10))
 			plt.subplot(221)
 			Z = (result - result.mean()) / (result.std(ddof=1) + 1e-6)
@@ -208,7 +211,7 @@ class StatisticalComparison:
 			plt.subplots_adjust(top=0.88)
 			plt.savefig(os.path.join(self.p, f"{name}_normality.png"))
 			plt.close()
-			self.log(f"Normality plot saved for {name}")
+			log(f"Normality plot saved for {name}")
 
 	@staticmethod
 	def bootstrap_means(data: np.ndarray, k: int):
@@ -246,7 +249,7 @@ def statscompare():
 
 	args = parser.parse_args()
 
-	comp = StatisticalComparison(args.location, Logger(os.path.join(args.location, "stats.log"), "Statistical comparison"), compare_all = args.compare_all)
+	comp = StatisticalComparison(args.location, compare_all = args.compare_all)
 	comp.dataload()
 	comp.run_comparisons(alpha=args.alpha)
 	comp.normality_plot()

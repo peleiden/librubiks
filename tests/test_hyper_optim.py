@@ -9,17 +9,17 @@ from librubiks.model import ModelConfig, Model, save_net
 
 
 class TestOptimizer(MainTest):
-	
+
 	@staticmethod
 	def f(params):
 		return -params['x'] + 42, np.empty(5), np.empty(5)
-	
+
 	def test_GS(self):
 		gs = GridSearch(self.f, {'x': (0, 42)})
 		gs.optimize(2) # WARNING: fails on sklearn 0.23
 		assert len(gs.score_history) == 2
 		assert gs.highscore >= gs.score_history[1]
-	
+
 	def test_BO(self):
 		"""NOTE: This fails on scikit-learn 0.23, see https://github.com/fmfn/BayesianOptimization/issues/231"""
 #
@@ -34,6 +34,7 @@ class TestOptimizer(MainTest):
 		location = 'local_tests/optim'
 
 		net = Model(ModelConfig())
+        log(f"Created network\n{net.config}\n{net}")
 		save_net(net, location)
 		for agent in agents:
 

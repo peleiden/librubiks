@@ -4,13 +4,12 @@ from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pelutils import Logger, NullLogger, TickTock
 from librubiks.solving.evaluation import EvalData, Evaluator
 from librubiks.plots.defaults import rc_params, rc_params_small, colours
 from librubiks.analysis.statscompare import bernoulli_error
 
 def plot_depth_win(loc: str, data: EvalData, size: tuple) -> str:
-    # depth, win%-graph
+    # depth, win% graph
     fig, ax = plt.subplots(figsize=size)
     ax.set_ylabel(f"Percentage of {data.games} games won")
     ax.set_xlabel(f"Scrambling depth: Number of random rotations applied to cubes")
