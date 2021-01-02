@@ -2,9 +2,9 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pelutils import TickTock
+from pelutils import thousand_seps
 from librubiks.train import TrainData
-from librubiks.plots.defaults import rc_params, colours
+from librubiks.plots.defaults import rc_params
 from librubiks.analysis.statscompare import bernoulli_error
 
 plt.rcParams.update(rc_params)
@@ -20,7 +20,7 @@ def plot_training(loc: str, data: TrainData, size: tuple) -> str:
     loss_ax.set_ylabel("Training loss")
     loss_ax.plot(np.arange(data.rollouts), data.losses, linewidth=3, color=colour, label="Training loss")
     loss_ax.tick_params(axis='y', labelcolor=colour)
-    loss_ax.set_xlabel(f"Rollout, each of {TickTock.thousand_seps(data.states_per_rollout)} states")
+    loss_ax.set_xlabel(f"Rollout, each of {thousand_seps(data.states_per_rollout)} states")
     loss_ax.set_ylim(np.array([-0.05*1.35, 1.35]) * data.losses.max())
     h1, l1 = loss_ax.get_legend_handles_labels()
     if data.evaluation_rollouts.size:
@@ -37,7 +37,7 @@ def plot_training(loc: str, data: TrainData, size: tuple) -> str:
         l1 += l2
     loss_ax.legend(h1, l1, loc=2)
 
-    title = (f"Training - {TickTock.thousand_seps(data.rollouts*data.states_per_rollout)} states")
+    title = (f"Training - {thousand_seps(data.rollouts*data.states_per_rollout)} states")
     plt.title(title)
     fig.tight_layout()
     plt.grid(True)

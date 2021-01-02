@@ -1,16 +1,15 @@
 import argparse
-import os
-
-import numpy as np
+from typing import Tuple
 
 from runeval import train_folders
 
 from librubiks.jobs import PlotJob
+from pelutils import log
 
 
-def _get_args() -> (str, bool, bool, bool):
+def _get_args() -> Tuple[str, bool, bool, bool]:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--location", type=str)
+    parser.add_argument("location")
     parser.add_argument("--no-train", action="store_true")
     parser.add_argument("--no-analysis", action="store_true")
     parser.add_argument("--no-eval", action="store_true")
@@ -20,6 +19,7 @@ def _get_args() -> (str, bool, bool, bool):
 
 
 if __name__ == "__main__":
-    args = _get_args()
-    job = PlotJob(*args)
-    job.execute()
+    with log.log_errors:
+        args = _get_args()
+        job = PlotJob(*args)
+        job.execute()
