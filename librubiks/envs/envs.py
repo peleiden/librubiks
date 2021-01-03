@@ -382,8 +382,9 @@ class _Cube686(_Cube):
 
         altered_states = states.copy()
         ini_states = np.array([state[n] for state, n in zip(states, neighbors_686[faces])])
-        for altered_state, state, ini_state, face, direction in zip(altered_states, states, ini_states, faces,
-                                                                    directions):
+        for altered_state, state, ini_state, face, direction in zip(
+            altered_states, states, ini_states, faces, directions
+        ):
             if direction:
                 altered_state[face] = state[face, self.roll_right]
                 altered_state[self.neighbor_idcs_pos[face], self.adjacents] = ini_state[
@@ -429,12 +430,27 @@ def get_env(env_key: str) -> Environment:
 
 if __name__ == "__main__":
     from pelutils import TickTock, TimeUnit
-    tt = TickTock()
+    # tt = TickTock()
     env = get_env("cube2024")
-    n = env.action_dim ** 7
-    states = env.repeat_state(env.get_solved(), n)
-    actions = env.iter_actions(n // env.action_dim)
-    tt.tick()
-    states = env.multi_act(states, actions)
-    t = tt.tock()
-    print(tt.stringify_time(t/n, TimeUnit.nanosecond))
+    # n = env.action_dim ** 7
+    # states = env.repeat_state(env.get_solved(), n)
+    # actions = env.iter_actions(n // env.action_dim)
+    # tt.tick()
+    # states = env.multi_act(states, actions)
+    # t = tt.tock()
+    # print(tt.stringify_time(t/n, TimeUnit.nanosecond))
+    state = env.get_solved()
+    state2 = env.act(env.act(env.get_solved(), 0), 0)
+    states = np.array([state, state2])
+    repeated_states = np.repeat(states, env.action_dim, axis=0)
+    repeated_actions = env.iter_actions(len(states))
+    substates = env.multi_act(repeated_states, repeated_actions)
+    unique, inverse = np.unique(substates, return_inverse=True, axis=0)
+    print(unique, len(unique))
+    print(inverse, len(inverse))
+    v = np.cumsum(unique, axis=1)[:, 5]
+    print(v, len(v))
+    allv = v[inverse]
+    print(allv)
+    print(np.cumsum(substates, axis=1)[:, 5])
+

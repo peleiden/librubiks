@@ -377,29 +377,36 @@ class Train:
 
         # Generates possible substates for all scrambled states. Shape: n_states*action_dim x *Cube_shape
         self.tt.profile("ADI substates")
-        substates = self.env.multi_act(np.repeat(states, self.env.action_dim, axis=0), self.env.iter_actions(len(states)))
+        repeated_states = np.repeat(states, self.env.action_dim, axis=0)
+        repeated_actions = self.env.iter_actions(len(states))
+        substates = self.env.multi_act(repeated_states, repeated_actions)
+        # Only feed forward unique states
+        unique_substates, inverse = np.unique(substates, return_inverse=True, axis=0)
         self.tt.end_profile()
+
         self.tt.profile("One-hot encoding")
-        substates_oh = self.env.multi_as_oh(substates)
+        unique_substates_oh = self.env.multi_as_oh(unique_substates)
         self.tt.end_profile()
 
         self.tt.profile("Reward")
-        solved_substates = self.env.multi_is_solved(substates)
+        unique_solved_substates = self.env.multi_is_solved(unique_substates)
         # Reward for won state is 1 normally but 0 if running with reward0
-        rewards = (torch.zeros if self.reward_method == 'reward0' else torch.ones)\
-            (*solved_substates.shape)
-        rewards[~solved_substates] = -1
+        rewards = (torch.zeros if self.reward_method == "reward0" else torch.ones)\
+            (*unique_solved_substates.shape)
+        rewards[~unique_solved_substates] = -1
         rewards = rewards.unsqueeze(1)
+        rewards = rewards[inverse]
         self.tt.end_profile()
 
         # Generates policy and value targets
         self.tt.profile("ADI feedforward")
-        values = ff(substates_oh).cpu()
+        values = ff(unique_substates_oh).cpu()
+        values = values[inverse]
         self.tt.end_profile()
 
         self.tt.profile("Calculating targets")
         values += rewards
-        values = values.reshape(-1, 12)
+        values = values.reshape(-1, self.env.action_dim)
         value_targets = values[np.arange(len(values)), torch.argmax(values, dim=1)]
         if self.reward_method == 'lapanfix':
             # Trains on goal state, sets goalstate to 0
