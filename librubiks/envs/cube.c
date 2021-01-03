@@ -37,13 +37,16 @@ int multi_act(signed char* states, long* actions, long n) {
     for (long i = 0; i < n; i ++) {
         // Row pointer for easy indexing
         signed char* p_state = states + 20 * i;
+        // Slightly faster by only looking up maps once
+        const unsigned char* cmap = maps[0][actions[i]];
+        const unsigned char* smap = maps[1][actions[i]];
         // Map corners
         for (unsigned char j = 0; j < 8; j ++) {
-            p_state[j] = maps[0][actions[i]][p_state[j]];
+            p_state[j] = cmap[p_state[j]];
         }
         // Map sides
         for (unsigned char j = 8; j < 20; j ++) {
-            p_state[j] = maps[1][actions[i]][p_state[j]];
+            p_state[j] = smap[p_state[j]];
         }
     }
     return 0;

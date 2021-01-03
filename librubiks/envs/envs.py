@@ -289,7 +289,7 @@ class _Cube2024(_Cube):
         return states
 
     def as_oh(self, state: np.ndarray) -> torch.Tensor:
-        """Takes in a state and returns an 1 x 480 one-hot tensor"""
+        """ Takes in a state and returns an 1 x 480 one-hot tensor """
         self._assert_shape(state)
         oh = torch.zeros(1, 480, device=gpu)
         idcs = self.oh_idcs + state
