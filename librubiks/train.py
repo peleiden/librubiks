@@ -34,6 +34,23 @@ class TrainData(DataStorage):
     json_name = "train-data.json"
 
 
+def _most_unique(states: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """ Finds most unique states faster than np.unique by splitting into chunks """
+    states_per_iter = min(len(states) // 10, 5000)
+    uniques = np.empty_like(states)
+    inverses = np.empty(len(states), dtype=int)
+    i = 0  # Current index into states
+    n = 0  # Number of unique states found
+    while i < len(states):
+        unique, inverse = np.unique(states[i:i+states_per_iter], return_inverse=True, axis=0)
+        uniques[n:n+len(unique)] = unique
+        # breakpoint()
+        inverses[i:i+states_per_iter] = inverse + n
+        n += len(unique)
+        i += states_per_iter
+    return uniques[:n], inverses
+
+
 class BatchFeedForward:
     """
     This class handles feedforwarding large batches that would otherwise cause memory overflow
@@ -380,8 +397,10 @@ class Train:
         repeated_states = np.repeat(states, self.env.action_dim, axis=0)
         repeated_actions = self.env.iter_actions(len(states))
         substates = self.env.multi_act(repeated_states, repeated_actions)
-        # Only feed forward unique states
-        unique_substates, inverse = np.unique(substates, return_inverse=True, axis=0)
+        # Only feed forward unique states to prevent wasting time and space on same states
+        self.tt.profile("Find unique substates")
+        unique_substates, inverse = _most_unique(substates)
+        self.tt.end_profile()
         self.tt.end_profile()
 
         self.tt.profile("One-hot encoding")
