@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from librubiks import envs
-from pelutils import get_commit, log
+from pelutils import log
 
 from librubiks.model import ModelConfig, create_net, save_net
 from librubiks.train import Train, TrainData
@@ -58,7 +58,7 @@ class TrainJob:
     ):
 
         self.location = location
-        log.configure(f"{self.location}/train.log", name)
+        log.configure(f"{self.location}/train.log", name, log_commit=True)
 
         self.name = name
         assert isinstance(self.name, str) and len(self.name) > 0
@@ -109,7 +109,7 @@ class TrainJob:
     def execute(self):
 
         # Sets representation
-        log.section(f"Starting job:\n{self.name} using {self.env} environment\nLocation {self.location}\nCommit: {get_commit()}")
+        log.section(f"Starting job:\n{self.name} using {self.env} environment\nLocation {self.location}")
 
         train = Train(
             env                 = self.env,
@@ -183,7 +183,7 @@ class EvalJob:
 
         self.name = name
         self.location = location
-        log.configure(f"{self.location}/{self.name}.log", name)
+        log.configure(f"{self.location}/{self.name}.log", name, log_commit=True)
         self.env = envs.get_env(env_key)
 
         assert isinstance(games, int) and games
@@ -256,7 +256,7 @@ class EvalJob:
             log(f"Time estimate: {len(self.agents) * self.evaluator.approximate_time() / 60:.2f} min. (Rough upper bound)")
 
     def execute(self):
-        log(f"Beginning evaluator {self.name}\nLocation {self.location}\nCommit: {get_commit()}")
+        log(f"Beginning evaluator {self.name}\nLocation {self.location}")
         evaldata = self.evaluator.eval(self.agents)
         paths = evaldata.save(self.location)
         log("Saved evaluation results to", *paths, sep="\n- ")
@@ -273,7 +273,7 @@ class PlotJob:
         self.analysis = analysis
         self.eval = eval_
 
-        log.configure(os.path.join(self.loc, "plots.log"), "Plotting")
+        log.configure(os.path.join(self.loc, "plots.log"), "Plotting", log_commit=True)
         log(
             "Plotting training"   if self.train    else "Not plotting training",
             "Plotting analysis"   if self.analysis else "Not plotting analysis",

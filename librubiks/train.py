@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Tuple
+import ctypes
 
 import numpy as np
 import torch
@@ -34,21 +35,18 @@ class TrainData(DataStorage):
     json_name = "train-data.json"
 
 
-def _most_unique(states: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """ Finds most unique states faster than np.unique by splitting into chunks """
-    states_per_iter = min(len(states) // 10, 5000)
-    uniques = np.empty_like(states)
-    inverses = np.empty(len(states), dtype=int)
-    i = 0  # Current index into states
-    n = 0  # Number of unique states found
-    while i < len(states):
-        unique, inverse = np.unique(states[i:i+states_per_iter], return_inverse=True, axis=0)
-        uniques[n:n+len(unique)] = unique
-        # breakpoint()
-        inverses[i:i+states_per_iter] = inverse + n
-        n += len(unique)
-        i += states_per_iter
-    return uniques[:n], inverses
+_unique_fun = ctypes.cdll.LoadLibrary("build/unique.so").unique
+def unique(states: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """ Get unique substates akin to np.unique, but much faster """
+    unique_index = np.empty(len(states), dtype=np.int32)
+    inverse = np.empty(len(states), dtype=np.int32)
+    c = _unique_fun(
+        len(states),
+        ctypes.c_void_p(states.ctypes.data),
+        ctypes.c_void_p(unique_index.ctypes.data),
+        ctypes.c_void_p(inverse.ctypes.data),
+    )
+    return states[unique_index[:c]], inverse
 
 
 class BatchFeedForward:
@@ -398,9 +396,7 @@ class Train:
         repeated_actions = self.env.iter_actions(len(states))
         substates = self.env.multi_act(repeated_states, repeated_actions)
         # Only feed forward unique states to prevent wasting time and space on same states
-        self.tt.profile("Find unique substates")
-        unique_substates, inverse = _most_unique(substates)
-        self.tt.end_profile()
+        unique_substates, inverse = unique(substates)
         self.tt.end_profile()
 
         self.tt.profile("One-hot encoding")

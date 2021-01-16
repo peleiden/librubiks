@@ -34,7 +34,7 @@ def linear(a, b, min_, max_, margin=0.05):
 
 class StatisticalComparison:
 	def __init__(self, path: str, compare_all: bool = False):
-		log.configure(os.path.join(path, "stats.log"), "Statistical comparison")
+		log.configure(os.path.join(path, "stats.log"), "Statistical comparison", log_commit=True)
 		self.p = path
 		self.compare_all = compare_all
 
