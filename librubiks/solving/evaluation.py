@@ -104,7 +104,7 @@ class Evaluator:
                     states.append(len(agent))
                     times.append(dt)
                 if not _isdeep(self.scrambling_depths):
-                    log.verbose(f"Performed evaluation at depth: {d}/{self.scrambling_depths[-1]}")
+                    log.debug(f"Performed evaluation at depth: {d}/{self.scrambling_depths[-1]}")
 
             res = np.reshape(res, (len(self.scrambling_depths), self.n_games))
             states = np.reshape(states, (len(self.scrambling_depths), self.n_games))
@@ -117,7 +117,7 @@ class Evaluator:
             for i, d in enumerate(self.scrambling_depths):
                 self.log_this_depth(res[i], states[i], times[i], d)
 
-            log.verbose(f"Evaluation runtime\n{self.tt}")
+            log.debug(f"Evaluation runtime\n{self.tt}")
 
         data = EvalData(
             games = self.n_games,

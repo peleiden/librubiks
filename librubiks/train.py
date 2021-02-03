@@ -3,9 +3,11 @@ from typing import Tuple
 import ctypes
 
 import numpy as np
+from pelutils.logger import Levels
 import torch
 
 from pelutils import DataStorage, log
+from pelutils.ds import unique, BatchFeedForward
 
 from librubiks import gpu, no_grad, reset_cuda
 from pelutils import log, thousand_seps, TickTock, TimeUnit
@@ -33,64 +35,6 @@ class TrainData(DataStorage):
 
     subfolder = "train-data"
     json_name = "train-data.json"
-
-
-_unique_fun = ctypes.cdll.LoadLibrary("build/unique.so").unique
-def unique(states: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """ Get unique substates akin to np.unique, but much faster """
-    unique_index = np.empty(len(states), dtype=np.int32)
-    inverse = np.empty(len(states), dtype=np.int32)
-    c = _unique_fun(
-        len(states),
-        ctypes.c_void_p(states.ctypes.data),
-        ctypes.c_void_p(unique_index.ctypes.data),
-        ctypes.c_void_p(inverse.ctypes.data),
-    )
-    return states[unique_index[:c]], inverse
-
-
-class BatchFeedForward:
-    """
-    This class handles feedforwarding large batches that would otherwise cause memory overflow
-    It works by splitting it into smaller batches, if it encounters a memory error
-    Only works when gradient should not be tracked
-    """
-
-    def __init__(self, net: Model, data_points: int, initial_batches=1, increase_factor=2):
-        self.net = net
-        self.data_points = data_points
-        self.batches = initial_batches
-        self.increase_factor = increase_factor
-
-    @no_grad
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        while True:
-            try:
-                output_parts = [self.net(x[slice_]) for slice_ in self._get_slices()]
-                output = torch.cat(output_parts)
-                break
-            except RuntimeError as e:  # Usually caused by running out of vram. If not, the error is still raised, else batch size is reduced
-                if "alloc" not in str(e):
-                    log.throw(e)
-                log.verbose(f"Intercepted RuntimeError {e}\nIncreasing number of ADI feed forward batches from "
-                            f"{self.batches} to {self.batches*self.increase_factor}")
-                self._more_batches()
-        return output
-
-    def update_net(self, net: Model):
-        self.net = net
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x)
-
-    def _more_batches(self):
-        self.batches *= self.increase_factor
-
-    def _get_slices(self):
-        slice_size = self.data_points // self.batches + 1
-        # Final slice may have overflow, however this is simply ignored when indexing
-        slices = [slice(i*slice_size, (i+1)*slice_size) for i in range(self.batches)]
-        return slices
 
 
 class Train:
@@ -267,8 +211,7 @@ class Train:
                     log(f"Updated alpha from {alpha:.2f} to 1")
                     alpha = 1
 
-            if log.verbose or rollout in (np.linspace(0, 1, 20)*self.rollouts).astype(int):
-                log(f"Rollout {rollout} completed with mean loss {losses[rollout]}")
+            log.debug(f"Rollout {rollout} completed with mean loss {losses[rollout]}")
 
             if self.with_analysis:
                 self.tt.profile("Analysis of rollout")
@@ -280,7 +223,7 @@ class Train:
 
                 self.agent.update_net(net)
                 self.tt.profile(f"Evaluating using agent {self.agent}")
-                with log.unverbose:
+                with log.level(Levels.INFO):
                     eval_results = self.evaluator.eval([self.agent])
                 eval_solved = (eval_results.sol_lengths != -1).mean()
                 evaluation_results.append(eval_solved)
@@ -294,8 +237,8 @@ class Train:
         log.section("Finished training")
         if evaluation_rollouts.size:
             log(f"Best net solves {best_solve*100:.2f} % of games at depth {self.evaluator.scrambling_depths}")
-        log.verbose("Training time distribution")
-        log.verbose(self.tt)
+        log.debug("Training time distribution")
+        log.debug(self.tt)
         total_time = self.tt.tock()
         eval_time = self.tt.profiles[f'Evaluating using agent {self.agent}'].sum() if evaluation_rollouts.size else 0
         train_time = self.tt.profiles["Training loop"].sum()
@@ -396,7 +339,7 @@ class Train:
         repeated_actions = self.env.iter_actions(len(states))
         substates = self.env.multi_act(repeated_states, repeated_actions)
         # Only feed forward unique states to prevent wasting time and space on same states
-        unique_substates, inverse = unique(substates)
+        unique_substates, inverse = unique(substates, return_inverse=True)
         self.tt.end_profile()
 
         self.tt.profile("One-hot encoding")

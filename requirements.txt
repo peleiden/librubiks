@@ -13,4 +13,4 @@ scipy>=1.4.1
 
 # Other stuff
 wget
-pelutils>=0.3.3
+pelutils[ds]>=0.5.3

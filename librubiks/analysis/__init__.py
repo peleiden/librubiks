@@ -77,7 +77,7 @@ class TrainAnalysis:
         self.param_changes = list()
         self.param_total_changes = list()
 
-        log.verbose(f"Analysis of this training was enabled. Extra analysis is done for evaluations and for first {extra_evals} rollouts")
+        log.debug(f"Analysis of this training was enabled. Extra analysis is done for evaluations and for first {extra_evals} rollouts")
 
     @no_grad
     def rollout(self, net: Model, rollout: int, value_targets: torch.Tensor):
