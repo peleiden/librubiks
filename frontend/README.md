@@ -22,4 +22,4 @@ cd frontend
 npm install
 npm start
 ```
-from the main repo folder and opening your browser at `localhost:4200`.
+from the main repo folder and opening your browser at `http://localhost:4200`.
